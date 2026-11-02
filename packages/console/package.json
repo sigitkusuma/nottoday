@@ -1,13 +1,37 @@
 {
   "name": "nottoday",
+  "version": "0.1.0",
+  "description": "Saving your n8n executions, one \"nope\" at a time. A Slack gateway on Cloudflare Workers that drops the Slack events no n8n workflow needs.",
   "license": "Apache-2.0",
+  "author": "sigitkusuma",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sigitkusuma/nottoday.git",
+    "directory": "packages/console"
+  },
+  "homepage": "https://github.com/sigitkusuma/nottoday#readme",
+  "bugs": {
+    "url": "https://github.com/sigitkusuma/nottoday/issues"
+  },
+  "keywords": [
+    "n8n",
+    "slack",
+    "cloudflare-workers",
+    "webhook",
+    "gateway",
+    "filter",
+    "executions",
+    "automation"
+  ],
   "private": true,
   "type": "module",
   "bin": {
     "nottoday": "dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "dev": "NOTTODAY_DEV=1 tsx watch src/server/cli.ts --no-open --port 4870",
@@ -16,17 +40,15 @@
     "start": "node dist/cli.js",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
-    "@hono/node-server": "^2.1.5",
-    "hono": "^4.13.16"
-  },
   "devDependencies": {
     "@gw/engine": "*",
     "@gw/shared": "*",
+    "@hono/node-server": "^2.1.5",
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "hono": "^4.13.16",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "tsx": "^4.20.0",

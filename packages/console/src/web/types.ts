@@ -41,6 +41,7 @@ export interface RouteSummary {
   wouldDrop: number;
   reasons: Record<string, number>;
   n8nErrors: number;
+  errorStatuses?: Record<string, number>;
 }
 
 export interface AppSignal {

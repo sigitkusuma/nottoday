@@ -129,7 +129,7 @@ function Sidebar({ status, tab, goTo }: { status: Status; tab: Tab; goTo: GoTo }
         </span>
         <span>
           <div className="brand-name">Not Today</div>
-          <div className="brand-sub">Slack gateway for n8n</div>
+          <div className="brand-sub">Saving n8n executions, one "nope" at a time</div>
         </span>
       </div>
       <nav className="nav" aria-label="Sections">

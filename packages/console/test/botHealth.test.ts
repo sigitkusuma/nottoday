@@ -36,6 +36,19 @@ describe("botStatus", () => {
     expect(botStatus(base).health).toBe("waiting");
   });
 
+  it("names the status code and what it usually means", () => {
+    const st = botStatus({ ...base, routes: [summary({ n8nErrors: 3, errorStatuses: { "405": 3 } })] });
+    expect(st.detail).toContain("r0");
+    expect(st.detail).toContain("HTTP 405 (3×)");
+    expect(st.detail).toContain("Production URL");
+  });
+
+  it("ignores errors from routes that are now turned off or removed", () => {
+    const off: AppConfig = { ...app(), routes: [{ ...app().routes[0], enabled: false }] };
+    expect(botStatus({ ...base, app: off, routes: [summary({ n8nErrors: 3 })] }).health).not.toBe("n8n-errors");
+    expect(botStatus({ ...base, routes: [summary({ route: "deleted", n8nErrors: 3 })] }).health).not.toBe("n8n-errors");
+  });
+
   it("ignores other bots' live events", () => {
     expect(botStatus({ ...base, live: [ev({ app: "other" })] }).health).toBe("waiting");
   });

@@ -57,9 +57,11 @@ export function botStatus(i: BotInput): BotStatus {
   if (badAt && badAt > goodAt) {
     return { health: "bad-secret", tone: "bad", label: "Wrong signing secret", detail: "Slack's requests fail the signature check. Replace the signing secret." };
   }
-  const errors = i.routes.reduce((n, r) => n + r.n8nErrors, 0);
-  if (errors > 0) {
-    return { health: "n8n-errors", tone: "bad", label: "n8n returning errors", detail: "n8n rejected some forwarded requests. A 404 usually means the workflow is inactive; a 5xx can mean n8n is out of executions." };
+  // Stats cover days; errors from a route that has since been turned off or removed aren't a problem now.
+  const active = new Set(i.app.routes.filter((r) => r.enabled !== false).map((r) => r.name));
+  const failing = i.routes.filter((r) => active.has(r.route) && r.n8nErrors > 0);
+  if (failing.length > 0) {
+    return { health: "n8n-errors", tone: "bad", label: "Workflow returning errors", detail: errorDetail(failing) };
   }
   if (i.app.routes.length === 0) {
     return { health: "no-routes", tone: "warn", label: "No routes yet", detail: "Requests are acknowledged and dropped until you add a route." };
@@ -72,6 +74,25 @@ export function botStatus(i: BotInput): BotStatus {
     return { health: "quiet", tone: "ok", label: "Healthy, quiet", detail: "Working. Nothing has arrived in the last few minutes." };
   }
   return { health: "waiting", tone: "warn", label: "Waiting for Slack", detail: "No Slack event has arrived yet. Open the bot to run the live check." };
+}
+
+const STATUS_HINT: [(s: number) => boolean, string][] = [
+  [(s) => s === 404, "404 usually means the workflow is inactive or the URL is wrong."],
+  [(s) => s === 405, "405 means that URL doesn't accept Slack's POST: use the trigger's Production URL."],
+  [(s) => s === 401 || s === 403, "The URL refused the request: check the Webhook node's authentication."],
+  [(s) => s >= 500, "5xx can mean n8n is down or out of executions."],
+];
+
+/** "support / triage got HTTP 404 (3×). 404 usually means…" */
+export function errorDetail(failing: RouteSummary[]): string {
+  const byStatus = new Map<number, number>();
+  for (const r of failing) for (const [s, n] of Object.entries(r.errorStatuses ?? {})) byStatus.set(Number(s), (byStatus.get(Number(s)) ?? 0) + n);
+  const codes = [...byStatus.entries()].sort((a, b) => b[1] - a[1]);
+  const names = failing.map((r) => r.route).join(", ");
+  if (codes.length === 0) return `The workflow URL for ${names} answered forwarded requests with an error.`;
+  const list = codes.map(([s, n]) => `HTTP ${s} (${n}×)`).join(", ");
+  const hint = STATUS_HINT.find(([test]) => test(codes[0][0]))?.[1] ?? "";
+  return `The workflow URL for ${names} answered ${list}. ${hint}`.trim();
 }
 
 export type PulseTone = "sent" | "saved" | "shadow" | "bad" | "info";

@@ -25,6 +25,8 @@ export interface RouteSummary {
   reasons: Record<string, number>;
   /** Forwards n8n answered with an error (status 0 = network error). */
   n8nErrors: number;
+  /** Those errors by HTTP status, e.g. { "404": 3 }. */
+  errorStatuses: Record<string, number>;
 }
 
 export interface RecentDecision {
@@ -78,7 +80,7 @@ export class Stats {
       const key = `${r.app}\u0000${r.route}`;
       let s = byRoute.get(key);
       if (!s) {
-        s = { app: r.app, route: r.route, mode: r.mode, received: 0, forwarded: 0, dropped: 0, wouldDrop: 0, reasons: {}, n8nErrors: 0 };
+        s = { app: r.app, route: r.route, mode: r.mode, received: 0, forwarded: 0, dropped: 0, wouldDrop: 0, reasons: {}, n8nErrors: 0, errorStatuses: {} };
         byRoute.set(key, s);
       }
       const n = Number(r.n);
@@ -88,7 +90,10 @@ export class Stats {
       if (r.outcome === "forwarded" && r.mode === "shadow" && r.filter === "fail") s.wouldDrop += n;
       if (r.filter === "fail" && r.reason) s.reasons[r.reason] = (s.reasons[r.reason] ?? 0) + n;
       // Status 0 with forwarded means dry run or network error; n8n errors are >= 400.
-      if (r.outcome === "forwarded" && Number(r.status) >= 400) s.n8nErrors += n;
+      if (r.outcome === "forwarded" && Number(r.status) >= 400) {
+        s.n8nErrors += n;
+        s.errorStatuses[String(r.status)] = (s.errorStatuses[String(r.status)] ?? 0) + n;
+      }
       s.mode = r.mode || s.mode;
     }
     return [...byRoute.values()].sort((a, b) => b.received - a.received);

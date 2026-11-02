@@ -1,6 +1,8 @@
 # Not Today
 
-A Slack gateway for n8n. It says "not today" to every Slack request no workflow needs, so it never becomes an n8n execution.
+**Saving your n8n executions, one "nope" at a time.**
+
+A Slack gateway for n8n: it says "not today" to every Slack request no workflow needs, so it never becomes an n8n execution.
 
 n8n counts an execution every time a trigger fires. A Slack Trigger fires on every message, edit, reaction and bot post in every channel your Slack bot is in, even when the workflow only cares about a few of them and stops at its first check. A busy workspace can use most of a monthly execution quota this way.
 
@@ -16,6 +18,19 @@ Slack app ──► https://<your-worker>.workers.dev/slack/<app>
 - **No n8n changes.** Requests are forwarded byte for byte with Slack's signature headers, so an existing Slack Trigger node keeps working as-is.
 - **Free.** It runs on the Cloudflare Workers free plan (100,000 requests a day) in your own account.
 - **Local console.** `npx nottoday` opens a web UI on your machine. Your tokens stay on your machine.
+
+![Dashboard: executions saved, and every bot with its live status](docs/screenshots/dashboard.png)
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/route-editor.png" alt="Route editor: pick what reaches the workflow, then try a message against it"></td>
+    <td><img src="docs/screenshots/connect-wizard.png" alt="Connect a Slack app: four steps, with Slack opened pre-filled from a manifest"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Routes: try a message before saving</sub></td>
+    <td align="center"><sub>Connecting a Slack app</sub></td>
+  </tr>
+</table>
 
 ## Quick start
 

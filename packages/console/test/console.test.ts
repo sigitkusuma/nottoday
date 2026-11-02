@@ -216,6 +216,7 @@ describe("stats", () => {
     ];
     const res = await call<{ routes: { received: number; wouldDrop: number; reasons: Record<string, number>; n8nErrors: number }[] }>("GET", "/stats/summary?days=1");
     expect(res.body.routes[0]).toMatchObject({ received: 50, wouldDrop: 47, reasons: { requireMention: 40, mentionIn: 7 }, n8nErrors: 7 });
+    expect(Object.values((res.body.routes[0] as unknown as { errorStatuses: Record<string, number> }).errorStatuses).reduce((a, b) => a + b, 0)).toBe(7);
     expect(cf.sqlQueries[0]).toContain("FROM slack_gateway_decisions");
   });
 
