@@ -1,0 +1,42 @@
+{
+  "lists": {
+    "oncall": ["UONCALL01", "UONCALL02"],
+    "supportChannels": ["CSUPPORT01"]
+  },
+  "apps": {
+    "demo": {
+      "description": "Local dev app. Put SLACK_SIGNING_SECRET_DEMO in .dev.vars.",
+      "signingSecret": "SLACK_SIGNING_SECRET_DEMO",
+      "routes": [
+        {
+          "name": "oncall-mentions",
+          "description": "Alert workflow: only messages that mention someone on call.",
+          "mode": "shadow",
+          "on": { "type": "event", "events": ["message"] },
+          "filters": { "subtypes": ["", "thread_broadcast", "file_share"], "ignoreBots": true, "mentionIn": "@oncall", "ignoreSelfMention": true },
+          "forwardTo": "https://n8n.example.com/webhook/oncall-alert"
+        },
+        {
+          "name": "assistant-dms",
+          "description": "Assistant workflow: direct messages to the bot.",
+          "on": { "type": "event", "events": ["message"] },
+          "filters": { "channelTypes": ["im"], "subtypes": [""], "ignoreBots": true },
+          "forwardTo": "https://n8n.example.com/webhook/assistant"
+        },
+        {
+          "name": "support-triage",
+          "description": "Triage workflow: new messages in the support channels.",
+          "on": { "type": "event", "events": ["message"] },
+          "filters": { "channels": "@supportChannels", "subtypes": ["", "file_share"], "ignoreBots": true },
+          "forwardTo": "https://n8n.example.com/webhook/support-triage"
+        },
+        {
+          "name": "ask-command",
+          "on": { "type": "command", "commands": ["/ask"] },
+          "respond": "proxy",
+          "forwardTo": "https://n8n.example.com/webhook/ask"
+        }
+      ]
+    }
+  }
+}

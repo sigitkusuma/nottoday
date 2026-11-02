@@ -1,0 +1,4 @@
+# Copy to .dev.vars for `npm run dev`. Never commit .dev.vars.
+SLACK_SIGNING_SECRET_DEMO=
+# Keep this on locally: true means nothing is sent to n8n.
+FORWARD_DRY_RUN=true

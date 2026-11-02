@@ -1,0 +1,17 @@
+{
+  // Local development only (`npm run dev`). Real installs are deployed by the
+  // console through the Cloudflare API, with the same bindings.
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "gateway-engine-dev",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-28",
+  "kv_namespaces": [{ "binding": "CONFIG", "id": "local-dev" }],
+  "analytics_engine_datasets": [{ "binding": "STATS", "dataset": "gateway_decisions_dev" }],
+  // Secrets (never put them here): one per Slack app, named in the config's
+  // `signingSecret`. For local dev, put them in .dev.vars.
+  // Optional: GATEWAY_FORWARD_SECRET, sent to n8n as x-slack-gateway-secret.
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "head_sampling_rate": 1 }
+  }
+}
