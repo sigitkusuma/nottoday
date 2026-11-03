@@ -1,7 +1,15 @@
-/** Decides, per route, whether a Slack request is forwarded. Pure functions, no I/O. */
+/** Decides, per route, whether a request is forwarded. Pure functions, no I/O. */
 
 import { channelId, mentionedUsers, type SlackEvent, type SlackInbound } from "./slack";
+import type { SourceInbound } from "./inbound";
+import { failedCondition } from "./match";
 import type { AppConfig, EventFilters, ListRef, Route, Trigger } from "@gw/shared";
+
+export type Inbound = SlackInbound | SourceInbound;
+export { lookup } from "./match";
+export { parseGithubRequest } from "./github";
+export { parseTelegramRequest } from "./telegram";
+export { parseWebhookRequest } from "./webhook";
 
 export interface Decision {
   route: Route;
@@ -13,17 +21,20 @@ export interface Decision {
 }
 
 /** Decisions for every enabled route whose trigger matches. Routes that don't match are left out. */
-export function decide(app: AppConfig, inbound: SlackInbound, lists: Record<string, string[]>): Decision[] {
+export function decide(app: AppConfig, inbound: Inbound, lists: Record<string, string[]>): Decision[] {
   const out: Decision[] = [];
   for (const route of app.routes) {
     if (route.enabled === false || !triggerMatches(route.on, inbound)) continue;
 
-    if (inbound.kind !== "event" || !route.filters) {
+    const slackFilters = inbound.kind === "event" && route.filters ? route.filters : undefined;
+    const conditions = route.match?.length ? route.match : undefined;
+    if (!slackFilters && !conditions) {
       out.push({ route, forward: true, filter: "none" });
       continue;
     }
 
-    const reason = failedFilter(route.filters, inbound.event, lists);
+    let reason = slackFilters && inbound.kind === "event" ? failedFilter(slackFilters, inbound.event, lists) : undefined;
+    if (reason === undefined && conditions) reason = failedCondition(conditions, conditionData(inbound), lists);
     const shadow = route.mode === "shadow";
     out.push(
       reason === undefined
@@ -34,7 +45,8 @@ export function decide(app: AppConfig, inbound: SlackInbound, lists: Record<stri
   return out;
 }
 
-export function triggerMatches(on: Trigger, inbound: SlackInbound): boolean {
+export function triggerMatches(on: Trigger, inbound: Inbound): boolean {
+  if (inbound.kind === "source") return on.type === "event" && (on.events.includes("*") || on.events.includes(inbound.type));
   switch (on.type) {
     case "event":
       return inbound.kind === "event" && (on.events.includes("*") || on.events.includes(inbound.event.type));
@@ -48,6 +60,22 @@ export function triggerMatches(on: Trigger, inbound: SlackInbound): boolean {
       if (on.callbackIds && !on.callbackIds.includes(p.view?.callback_id ?? p.callback_id ?? "")) return false;
       return true;
     }
+  }
+}
+
+/** What Route.match conditions read: the source's data, or for Slack the event, the interactivity payload or the command. */
+export function conditionData(inbound: Inbound): unknown {
+  switch (inbound.kind) {
+    case "source":
+      return inbound.data;
+    case "event":
+      return inbound.event;
+    case "interactivity":
+      return inbound.payload;
+    case "command":
+      return { command: inbound.command };
+    default:
+      return {};
   }
 }
 

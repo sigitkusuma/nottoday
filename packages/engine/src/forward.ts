@@ -1,11 +1,14 @@
-/** Sends the Slack request on to n8n, byte for byte, with Slack's signature headers. */
+/** Sends the request on to n8n, byte for byte, with the sender's own headers (Slack's signature, GitHub's event name, …). */
 
 export interface ForwardRequest {
   url: string;
   body: string;
   contentType: string;
-  slackSignature: string;
-  slackTimestamp: string;
+  /** Slack: only these two of Slack's headers are passed on, as before other sources existed. */
+  slackSignature?: string;
+  slackTimestamp?: string;
+  /** Other sources: the original request headers, passed on minus the ones that describe the hop to the gateway. */
+  passthrough?: Headers;
   appName: string;
   routeName: string;
   /** Optional shared secret for n8n Webhook nodes using Header Auth. */
@@ -29,15 +32,32 @@ export interface ForwardResult {
 const RETRYABLE_STATUS = new Set([502, 503, 504]);
 const BACKOFF_MS = [500, 1500];
 
+// Headers about the connection to the gateway, not about the request: never passed on.
+const HOP_HEADERS = /^(host|content-length|connection|keep-alive|transfer-encoding|upgrade|te|trailer|accept-encoding|x-real-ip|true-client-ip|cdn-loop|cf-.*|x-forwarded-.*)$/i;
+
+export function forwardHeaders(req: Pick<ForwardRequest, "contentType" | "slackSignature" | "slackTimestamp" | "passthrough" | "appName" | "routeName" | "forwardSecret">): Headers {
+  const headers = new Headers();
+  if (req.passthrough) {
+    req.passthrough.forEach((value, name) => {
+      if (!HOP_HEADERS.test(name)) headers.set(name, value);
+    });
+  } else {
+    headers.set("x-slack-signature", req.slackSignature ?? "");
+    headers.set("x-slack-request-timestamp", req.slackTimestamp ?? "");
+    // Kept for workflows that check them; new installs can use the x-nottoday-* names.
+    headers.set("x-slack-gateway-app", req.appName);
+    headers.set("x-slack-gateway-route", req.routeName);
+    if (req.forwardSecret) headers.set("x-slack-gateway-secret", req.forwardSecret);
+  }
+  headers.set("content-type", req.contentType);
+  headers.set("x-nottoday-app", req.appName);
+  headers.set("x-nottoday-route", req.routeName);
+  if (req.forwardSecret) headers.set("x-nottoday-secret", req.forwardSecret);
+  return headers;
+}
+
 export async function forward(req: ForwardRequest): Promise<ForwardResult> {
-  const headers = new Headers({
-    "content-type": req.contentType,
-    "x-slack-signature": req.slackSignature,
-    "x-slack-request-timestamp": req.slackTimestamp,
-    "x-slack-gateway-app": req.appName,
-    "x-slack-gateway-route": req.routeName,
-  });
-  if (req.forwardSecret) headers.set("x-slack-gateway-secret", req.forwardSecret);
+  const headers = forwardHeaders(req);
 
   const maxAttempts = 1 + (req.retries ?? 0);
   let last: ForwardResult = { ok: false, status: 0, attempts: 0 };

@@ -1,7 +1,11 @@
+import { SOURCE_PREFIX, sourceOf } from "@gw/shared";
 import { ConfigLoader, type LoadedConfig } from "./config";
-import { forward, type ForwardResult } from "./forward";
+import { forward, type ForwardRequest, type ForwardResult } from "./forward";
+import { parseGithubRequest, verifyGithubSignature } from "./github";
 import { decide, type Decision } from "./router";
 import { parseSlackRequest, verifySlackSignature, type SlackInbound } from "./slack";
+import { parseTelegramRequest, verifyTelegramToken } from "./telegram";
+import { parseWebhookRequest, verifyWebhook } from "./webhook";
 import { record } from "./stats";
 import { ENGINE_VERSION } from "./version";
 
@@ -34,16 +38,18 @@ export async function handle(
     });
   }
 
-  const pathMatch = /^\/slack\/([a-z0-9_-]+)\/?$/.exec(url.pathname);
+  const pathMatch = /^\/(slack|github|telegram|hook)\/([a-z0-9_-]+)\/?$/.exec(url.pathname);
   if (!pathMatch) return new Response("Not found", { status: 404 });
   if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
   if (!loaded) return new Response("Gateway not configured", { status: 503 });
   const cfg = loaded.config;
 
-  const appName = pathMatch[1];
-  const app = Object.hasOwn(cfg.apps, appName) ? cfg.apps[appName] : undefined;
+  const [, prefix, appName] = pathMatch;
+  const found = Object.hasOwn(cfg.apps, appName) ? cfg.apps[appName] : undefined;
+  // An app is only reachable under its own source's prefix: /github/x never reaches a Slack app.
+  const app = found && SOURCE_PREFIX[sourceOf(found)] === prefix ? found : undefined;
   if (!app) {
-    // Logged so the console's live check can say "Slack is calling an app name the gateway doesn't know".
+    // Logged so the console's live check can say "the app is calling an app name the gateway doesn't know".
     console.warn(JSON.stringify({ message: "unknown app", app: appName }));
     return new Response("Unknown app", { status: 404 });
   }
@@ -59,6 +65,42 @@ export async function handle(
   }
   const body = await request.text();
   if (body.length > MAX_BODY_BYTES) return new Response("Payload too large", { status: 413 });
+  const contentType = request.headers.get("content-type") ?? "application/json";
+  const source = sourceOf(app);
+
+  if (source !== "slack") {
+    const ok =
+      source === "github"
+        ? await verifyGithubSignature(signingSecret, request.headers.get("x-hub-signature-256"), body)
+        : source === "telegram"
+          ? verifyTelegramToken(signingSecret, request.headers.get("x-telegram-bot-api-secret-token"))
+          : app.verify
+            ? await verifyWebhook(app.verify, signingSecret, request, body)
+            : false;
+    if (!ok) {
+      console.warn(JSON.stringify({ message: "bad signature", source, app: appName }));
+      record(env.STATS, { app: appName, kind: "unknown", outcome: "bad_signature" });
+      return new Response("Invalid signature", { status: 401 });
+    }
+    const inbound =
+      source === "github"
+        ? parseGithubRequest(request.headers, body)
+        : source === "telegram"
+          ? parseTelegramRequest(request.headers, body)
+          : parseWebhookRequest(app, request.headers, body);
+    if (inbound.handshake) {
+      console.log(JSON.stringify({ message: "url_verification", source, app: appName }));
+      record(env.STATS, { app: appName, kind: "url_verification", outcome: "url_verification" });
+      return new Response("ok", { status: 200 });
+    }
+    return route(env, ctx, {
+      appName,
+      decisions: decide(app, inbound, cfg.lists),
+      logBase: { message: "request", source, app: appName, kind: "event", type: inbound.type, channel: inbound.channel, id: inbound.id },
+      stats: { app: appName, kind: "event", type: inbound.type, channel: inbound.channel },
+      forwarding: { body, contentType, passthrough: request.headers },
+    });
+  }
 
   const timestamp = request.headers.get("x-slack-request-timestamp");
   const signature = request.headers.get("x-slack-signature");
@@ -68,7 +110,6 @@ export async function handle(
     return new Response("Invalid signature", { status: 401 });
   }
 
-  const contentType = request.headers.get("content-type") ?? "application/json";
   const inbound = parseSlackRequest(contentType, body);
   if (inbound.kind === "url_verification") {
     console.log(JSON.stringify({ message: "url_verification", app: appName }));
@@ -77,13 +118,6 @@ export async function handle(
   }
 
   const described = describe(inbound);
-  const logBase = {
-    message: "slack_request",
-    app: appName,
-    ...described,
-    retry: request.headers.get("x-slack-retry-num") ?? undefined,
-    retryReason: request.headers.get("x-slack-retry-reason") ?? undefined,
-  };
 
   // Slack retries an event when it didn't get a 2xx, and a retry can mean two things:
   // we processed the original but our reply was lost, or the original never reached us
@@ -92,30 +126,46 @@ export async function handle(
   // retry is processed like a first delivery: at-least-once, with the retry number
   // and reason in the log. A rare duplicate beats a lost event.
 
-  const decisions = decide(app, inbound, cfg.lists);
+  return route(env, ctx, {
+    appName,
+    decisions: decide(app, inbound, cfg.lists),
+    logBase: {
+      message: "slack_request",
+      app: appName,
+      ...described,
+      retry: request.headers.get("x-slack-retry-num") ?? undefined,
+      retryReason: request.headers.get("x-slack-retry-reason") ?? undefined,
+    },
+    stats: { app: appName, kind: described.kind, type: described.type, channel: described.channel },
+    forwarding: { body, contentType, slackSignature: signature ?? "", slackTimestamp: timestamp ?? "" },
+  });
+}
+
+interface Routing {
+  appName: string;
+  decisions: Decision[];
+  /** Fields of the log line the console's Activity page reads. */
+  logBase: Record<string, unknown>;
+  stats: { app: string; kind?: string; type?: string; channel?: string };
+  forwarding: Pick<ForwardRequest, "body" | "contentType" | "slackSignature" | "slackTimestamp" | "passthrough">;
+}
+
+/** Forwards what the routes let through, replies to the sender, then logs and records every decision. */
+async function route(env: Env, ctx: ExecutionContext, r: Routing): Promise<Response> {
+  const { decisions, appName } = r;
   const forwardSecret = readSecret(env, "GATEWAY_FORWARD_SECRET");
   // Set FORWARD_DRY_RUN=true in .dev.vars so local testing never reaches the real n8n.
   const dryRun = readSecret(env, "FORWARD_DRY_RUN") === "true";
   const send = (d: Decision, extra: { timeoutMs?: number; retries?: number }): Promise<ForwardResult> =>
     dryRun
       ? Promise.resolve({ ok: true, status: 0, attempts: 0, error: "dry run: not sent" })
-      : forward({
-          url: d.route.forwardTo,
-          body,
-          contentType,
-          slackSignature: signature ?? "",
-          slackTimestamp: timestamp ?? "",
-          appName,
-          routeName: d.route.name,
-          forwardSecret,
-          ...extra,
-        });
+      : forward({ ...r.forwarding, url: d.route.forwardTo, appName, routeName: d.route.name, forwardSecret, ...extra });
 
   const forwarded = decisions.filter((d) => d.forward);
   const proxy = forwarded.find((d) => d.route.respond === "proxy");
   const background = forwarded
     .filter((d) => d !== proxy)
-    .map((d) => send(d, { retries: BACKGROUND_RETRIES }).then((r) => [d, r] as const));
+    .map((d) => send(d, { retries: BACKGROUND_RETRIES }).then((res) => [d, res] as const));
 
   let reply = new Response(null, { status: 200 });
   let proxyResult: ForwardResult | undefined;
@@ -135,35 +185,34 @@ export async function handle(
       const byRoute = new Map<Decision, ForwardResult>(results);
       if (proxy && proxyResult) byRoute.set(proxy, proxyResult);
       const routes = decisions.map((d) => {
-        const r = byRoute.get(d);
+        const res = byRoute.get(d);
         return {
           route: d.route.name,
           mode: d.route.mode ?? "enforce",
           filter: d.filter,
           reason: d.reason,
           forwarded: d.forward,
-          status: r?.status,
-          attempts: r?.attempts,
-          error: r?.error,
+          status: res?.status,
+          attempts: res?.attempts,
+          error: res?.error,
         };
       });
-      const failed = !dryRun && routes.some((r) => r.forwarded && !(r.status && r.status < 400));
-      const line = JSON.stringify({ ...logBase, dryRun: dryRun || undefined, routes, forwardedCount: forwarded.length });
+      const failed = !dryRun && routes.some((x) => x.forwarded && !(x.status && x.status < 400));
+      const line = JSON.stringify({ ...r.logBase, dryRun: dryRun || undefined, routes, forwardedCount: forwarded.length });
       if (failed) console.error(line);
       else console.log(line);
 
-      const common = { app: appName, kind: described.kind, type: described.type, channel: described.channel };
-      if (routes.length === 0) record(env.STATS, { ...common, outcome: "unrouted" });
-      for (const r of routes) {
+      if (routes.length === 0) record(env.STATS, { ...r.stats, outcome: "unrouted" });
+      for (const x of routes) {
         record(env.STATS, {
-          ...common,
-          route: r.route,
-          mode: r.mode,
-          filter: r.filter,
-          reason: r.reason,
-          outcome: r.forwarded ? "forwarded" : "dropped",
-          status: r.status,
-          attempts: r.attempts,
+          ...r.stats,
+          route: x.route,
+          mode: x.mode,
+          filter: x.filter,
+          reason: x.reason,
+          outcome: x.forwarded ? "forwarded" : "dropped",
+          status: x.status,
+          attempts: x.attempts,
         });
       }
     }),

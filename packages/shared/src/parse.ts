@@ -59,6 +59,9 @@ function shapeErrors(data: unknown): string[] {
       continue;
     }
     if (typeof app.signingSecret !== "string") errors.push(`${at}.signingSecret must be a string`);
+    if (app.source !== undefined && typeof app.source !== "string") errors.push(`${at}.source must be a string`);
+    if (app.eventField !== undefined && typeof app.eventField !== "string") errors.push(`${at}.eventField must be a string`);
+    if (app.verify !== undefined && !(isObject(app.verify) && typeof app.verify.type === "string")) errors.push(`${at}.verify must be an object with a type`);
     if (!Array.isArray(app.routes)) {
       errors.push(`${at}.routes must be an array`);
       continue;
@@ -69,6 +72,18 @@ function shapeErrors(data: unknown): string[] {
       if (typeof route.name !== "string") errors.push(`${r}.name must be a string`);
       if (typeof route.forwardTo !== "string") errors.push(`${r}.forwardTo must be a string`);
       if (route.filters !== undefined) errors.push(...filterShapeErrors(`${r}.filters`, route.filters));
+      if (route.match !== undefined) {
+        if (!Array.isArray(route.match)) errors.push(`${r}.match must be an array`);
+        else
+          route.match.forEach((c: unknown, j) => {
+            const ok =
+              isObject(c) &&
+              typeof c.field === "string" &&
+              typeof c.op === "string" &&
+              (c.value === undefined || typeof c.value === "string" || isStringArray(c.value));
+            if (!ok) errors.push(`${r}.match[${j}] must be { field, op, value? }`);
+          });
+      }
       const on = route.on;
       if (!isObject(on) || typeof on.type !== "string" || !TRIGGER_TYPES.includes(on.type)) {
         return void errors.push(`${r}.on.type must be one of ${TRIGGER_TYPES.join(", ")}`);
