@@ -2,8 +2,9 @@
 
 import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
-import { CONFIG_HISTORY_PREFIX, type GatewayConfig } from "@gw/shared";
+import { CONFIG_HISTORY_PREFIX, requestPath, sourceOf, type GatewayConfig, type SourceType, type WebhookVerify } from "@gw/shared";
 import { CloudflareApi, CloudflareError, createTokenUrl } from "./cloudflare";
+import { TelegramApi, TelegramError } from "./telegram";
 import { BUNDLED_ENGINE_VERSION, ConflictError, Gateway, InputError, InvalidConfigError, analyticsEngineUrl, installGateway, isAnalyticsEngineOff, loadEngineBundle } from "./gateway";
 import { N8nApi, N8nError } from "./n8n";
 import { Stats } from "./stats";
@@ -198,13 +199,44 @@ export function createApi(deps: ApiDeps = {}): Hono {
     return c.json({ hash: await gateway(await loadState()).rollback(key) });
   });
 
-  // Slack apps
+  // Apps (Slack, GitHub, Telegram, any webhook)
 
   api.post("/apps", async (c) => {
-    const { key, signingSecret, description } = await c.req.json<{ key?: string; signingSecret?: string; description?: string }>();
-    if (!key || !signingSecret) throw new UserError("App name and signing secret are required.");
-    await gateway(await loadState()).addSlackApp(key.trim(), signingSecret, description?.trim() || undefined);
-    return c.json({ ok: true });
+    const body = await c.req.json<{ key?: string; source?: SourceType; signingSecret?: string; generate?: boolean; verify?: WebhookVerify; eventField?: string; description?: string }>();
+    if (!body.key) throw new UserError("Give the app a name.");
+    const result = await gateway(await loadState()).addApp({
+      key: body.key,
+      source: body.source ?? "slack",
+      secret: body.signingSecret,
+      generate: body.generate,
+      verify: body.verify,
+      eventField: body.eventField,
+      description: body.description?.trim() || undefined,
+    });
+    return c.json({ ok: true, ...result });
+  });
+
+  /** Registers the gateway as the bot's webhook, with a fresh secret token. The bot token is used for this call only. */
+  api.post("/apps/:key/telegram/connect", async (c) => {
+    const { botToken } = await c.req.json<{ botToken?: string }>();
+    if (!botToken?.trim()) throw new UserError("Paste the bot token from BotFather.");
+    const key = c.req.param("key");
+    const state = await loadState();
+    const gw = gateway(state);
+    const { config } = await gw.readConfig();
+    const app = config.apps[key];
+    if (!app || sourceOf(app) !== "telegram") throw new UserError(`No Telegram app named "${key}".`);
+    try {
+      const tg = new TelegramApi(botToken.trim(), fetchImpl);
+      const me = await tg.getMe();
+      const secret = await gw.rotateSecret(key);
+      const url = `${state.gateway!.url}${requestPath("telegram", key)}`;
+      await tg.setWebhook(url, secret);
+      return c.json({ ok: true, username: me.username ?? me.first_name ?? "", url });
+    } catch (err) {
+      if (err instanceof TelegramError) throw new UserError(err.message);
+      throw err;
+    }
   });
 
   api.put("/apps/:key/secret", async (c) => {
@@ -215,7 +247,7 @@ export function createApi(deps: ApiDeps = {}): Hono {
   });
 
   api.delete("/apps/:key", async (c) => {
-    await gateway(await loadState()).removeSlackApp(c.req.param("key"));
+    await gateway(await loadState()).removeApp(c.req.param("key"));
     return c.json({ ok: true });
   });
 

@@ -21,6 +21,8 @@ export interface LiveEvent {
   time: string;
   kind: LiveKind;
   app?: string;
+  /** slack, github, telegram or webhook. Absent on lines from engines before 0.3.0, which are all Slack. */
+  source?: string;
   type?: string;
   subtype?: string;
   channel?: string;
@@ -61,12 +63,14 @@ export function parseTailMessage(text: string): LiveEvent[] {
         continue;
       }
       const app = typeof line.app === "string" ? line.app : undefined;
+      const source = str(line.source);
       switch (line.message) {
         case "url_verification":
-          out.push({ time, kind: "verified", app });
+          out.push({ time, kind: "verified", app, source });
           break;
         case "bad slack signature":
-          out.push({ time, kind: "bad_signature", app });
+        case "bad signature":
+          out.push({ time, kind: "bad_signature", app, source });
           break;
         case "unknown app":
           out.push({ time, kind: "unknown_app", app });
@@ -75,10 +79,12 @@ export function parseTailMessage(text: string): LiveEvent[] {
           out.push({ time, kind: "missing_secret", app });
           break;
         case "slack_request":
+        case "request":
           out.push({
             time,
             kind: "event",
             app,
+            source,
             type: str(line.type),
             subtype: str(line.subtype),
             channel: str(line.channel),

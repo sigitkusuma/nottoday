@@ -4,8 +4,20 @@
  * Worker secret per Slack app.
  */
 
+import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { CONFIG_HISTORY_PREFIX, CONFIG_KEY, configHash, parseConfig, type AppConfig, type GatewayConfig } from "@gw/shared";
+import {
+  CONFIG_HISTORY_PREFIX,
+  CONFIG_KEY,
+  SOURCE_TYPES,
+  configHash,
+  parseConfig,
+  validateConfig,
+  type AppConfig,
+  type GatewayConfig,
+  type SourceType,
+  type WebhookVerify,
+} from "@gw/shared";
 import { ENGINE_VERSION } from "@gw/engine/version";
 import { CloudflareError, type CloudflareApi } from "./cloudflare";
 import type { LocalState } from "./store";
@@ -121,8 +133,32 @@ function historyStamp(): string {
   return `${new Date(lastHistoryMs).toISOString()}-${crypto.randomUUID().slice(0, 8)}`;
 }
 
-export function secretNameFor(appKey: string): string {
-  return `SLACK_SIGNING_SECRET_${appKey.toUpperCase().replace(/[^A-Z0-9]/g, "_")}`;
+const SECRET_PREFIX: Record<SourceType, string> = {
+  slack: "SLACK_SIGNING_SECRET",
+  github: "GITHUB_SECRET",
+  telegram: "TELEGRAM_SECRET",
+  webhook: "WEBHOOK_SECRET",
+};
+
+export function secretNameFor(appKey: string, source: SourceType = "slack"): string {
+  return `${SECRET_PREFIX[source]}_${appKey.toUpperCase().replace(/[^A-Z0-9]/g, "_")}`;
+}
+
+/** 32 characters of A-Z, a-z, 0-9, - and _: strong, and accepted everywhere a secret is pasted (Telegram allows only these). */
+export function generateSecret(): string {
+  return randomBytes(24).toString("base64url");
+}
+
+export interface NewApp {
+  key: string;
+  source: SourceType;
+  /** The secret the app gave you (Slack's signing secret, a service's webhook secret). */
+  secret?: string;
+  /** Generate one instead; it's returned once so it can be pasted into the app. */
+  generate?: boolean;
+  verify?: WebhookVerify;
+  eventField?: string;
+  description?: string;
 }
 
 export interface Health {
@@ -213,20 +249,39 @@ export class Gateway {
     return this.saveConfig(await this.readHistory(key), hash);
   }
 
-  /** Stores the signing secret as a Worker secret (never in KV) and adds the app with no routes yet. */
-  async addSlackApp(appKey: string, signingSecret: string, description?: string): Promise<void> {
-    if (!/^[a-z0-9_-]+$/.test(appKey)) throw new InputError("Use lowercase letters, digits, - or _ for the app name; it becomes the URL path.");
-    if (!/^[0-9a-f]{32}$/i.test(signingSecret.trim())) {
+  /** Stores the app's secret as a Worker secret (never in KV) and adds the app with no routes yet. Returns a generated secret once. */
+  async addApp(a: NewApp): Promise<{ secret?: string }> {
+    const key = a.key.trim();
+    if (!/^[a-z0-9_-]+$/.test(key)) throw new InputError("Use lowercase letters, digits, - or _ for the app name; it becomes the URL path.");
+    if (!SOURCE_TYPES.includes(a.source)) throw new InputError(`Unknown kind of app "${a.source}".`);
+    // Telegram's secret token is ours to choose, so it's always generated.
+    const generated = a.generate || a.source === "telegram" ? generateSecret() : undefined;
+    const secret = (generated ?? a.secret ?? "").trim();
+    if (!secret) throw new InputError("Paste the secret, or let the console generate one.");
+    if (a.source === "slack" && !/^[0-9a-f]{32}$/i.test(secret)) {
       throw new InputError("That doesn't look like a Slack Signing Secret (32 hexadecimal characters). Click Show next to Signing Secret in Basic Information → App Credentials, and don't use the Client Secret or Verification Token.");
     }
-    const { config, hash } = await this.readConfig();
-    if (Object.hasOwn(config.apps, appKey)) throw new InputError(`An app named "${appKey}" already exists.`);
 
-    const secretName = secretNameFor(appKey);
-    await this.cf.putSecret(this.accountId, this.install.scriptName, secretName, signingSecret.trim());
-    const app: AppConfig = { source: "slack", signingSecret: secretName, routes: [] };
-    if (description) app.description = description;
-    await this.saveConfig({ ...config, apps: { ...config.apps, [appKey]: app } }, hash);
+    const { config, hash } = await this.readConfig();
+    if (Object.hasOwn(config.apps, key)) throw new InputError(`An app named "${key}" already exists.`);
+    const secretName = secretNameFor(key, a.source);
+    const app: AppConfig = { source: a.source, signingSecret: secretName, routes: [] };
+    if (a.verify) app.verify = a.verify;
+    if (a.eventField?.trim()) app.eventField = a.eventField.trim();
+    if (a.description) app.description = a.description;
+    const next = { ...config, apps: { ...config.apps, [key]: app } };
+    // Check first, so a config the gateway would refuse never leaves a secret behind.
+    const problems = validateConfig(next);
+    if (problems.length) throw new InvalidConfigError(problems);
+
+    await this.cf.putSecret(this.accountId, this.install.scriptName, secretName, secret);
+    await this.saveConfig(next, hash);
+    return generated ? { secret: generated } : {};
+  }
+
+  /** Kept for callers from before other sources existed. */
+  async addSlackApp(appKey: string, signingSecret: string, description?: string): Promise<void> {
+    await this.addApp({ key: appKey, source: "slack", secret: signingSecret, description });
   }
 
   async replaceSigningSecret(appKey: string, signingSecret: string): Promise<void> {
@@ -236,7 +291,14 @@ export class Gateway {
     await this.cf.putSecret(this.accountId, this.install.scriptName, app.signingSecret, signingSecret.trim());
   }
 
-  async removeSlackApp(appKey: string): Promise<void> {
+  /** Replaces the app's secret with a new generated one and returns it. */
+  async rotateSecret(appKey: string): Promise<string> {
+    const secret = generateSecret();
+    await this.replaceSigningSecret(appKey, secret);
+    return secret;
+  }
+
+  async removeApp(appKey: string): Promise<void> {
     const { config, hash } = await this.readConfig();
     const app = config.apps[appKey];
     if (!app) return;
