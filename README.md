@@ -2,22 +2,20 @@
 
 **Saving your n8n executions, one "nope" at a time.**
 
-A webhook gateway for n8n, for **Slack, GitHub, Telegram, or any webhook**. It says "not today" to every request no workflow needs, so it never becomes an n8n execution.
+A Slack gateway for n8n. It says "not today" to every Slack request no workflow needs, so it never becomes an n8n execution. GitHub, Telegram and any webhook are [coming soon](#coming-soon-github-telegram-and-any-webhook).
 
 n8n counts an execution every time a trigger fires. A Slack Trigger fires on every message, edit, reaction and bot post in every channel your Slack bot is in, even when the workflow only cares about a few of them and stops at its first check. A busy workspace can use most of a monthly execution quota this way.
 
-The same goes for GitHub (every push, comment and CI run), Telegram bots in busy groups, and webhooks from other services.
-
-This tool puts a small Cloudflare Worker between those apps and n8n. It checks each request's signature, answers at once, and forwards only the requests a workflow acts on. Everything it drops is an execution you don't pay for.
+This tool puts a small Cloudflare Worker between Slack and n8n. It checks Slack's signature, answers Slack at once, and forwards only the requests a workflow acts on. Everything it drops is an execution you don't pay for. It works for any Slack-triggered workflow: alerts, assistants, triage, slash commands, buttons.
 
 ```
-Slack, GitHub, Telegram, a webhook ──► https://<your-worker>.workers.dev/<slack|github|telegram|hook>/<app>
-                 ├─ checks the signature or secret, replies 200 right away
+Slack app ──► https://<your-worker>.workers.dev/slack/<app>
+                 ├─ checks the signature, replies 200 to Slack right away
                  ├─ forwards matching requests to n8n, unchanged
                  └─ drops the rest (counted, never sent)
 ```
 
-- **No n8n changes for Slack.** Requests are forwarded byte for byte with Slack's signature headers, so an existing Slack Trigger node keeps working as-is. For GitHub, Telegram and webhooks, the workflow starts from a plain Webhook node (see [Other apps](#other-apps)).
+- **No n8n changes.** Requests are forwarded byte for byte with Slack's signature headers, so an existing Slack Trigger node keeps working as-is.
 - **Free.** It runs on the Cloudflare Workers free plan (100,000 requests a day) in your own account.
 - **Local console.** `npx nottoday` opens a web UI on your machine. Your tokens stay on your machine.
 
@@ -48,7 +46,7 @@ The console opens in your browser with a setup checklist that shows what's done 
 2. **Install.** One click creates the Worker, its settings store and its `workers.dev` address.
 3. **Turn on stats** (optional, free). Cloudflare needs one Analytics Engine dataset; the console shows the exact name to use. Routing works without it.
 4. **Connect n8n** (optional). Counts executions per workflow, so you can see which ones to fix, and lets you pick trigger URLs from a list.
-5. **Connect an app.** Pick Slack, GitHub, Telegram or any webhook. For Slack it's a four-step wizard. For a new app, one button opens Slack with everything filled in from a manifest: the gateway's Request URL, the events, the permissions, and Socket Mode off (with Socket Mode on, Slack never calls the URL). You paste the Signing Secret, click Verify in Slack, and a **live check** confirms each step within seconds: URL verified, first event arrived, signatures OK. For an existing app, the wizard gives you a checklist instead; save its old Request URL first, since putting it back is your rollback. The other apps are covered [below](#other-apps).
+5. **Connect a Slack app.** A four-step wizard. For a new app, one button opens Slack with everything filled in from a manifest: the gateway's Request URL, the events, the permissions, and Socket Mode off (with Socket Mode on, Slack never calls the URL). You paste the Signing Secret, click Verify in Slack, and a **live check** confirms each step within seconds: URL verified, first event arrived, signatures OK. For an existing app, the wizard gives you a checklist instead; save its old Request URL first, since putting it back is your rollback.
 6. **Add a route.** Pick what should reach the workflow (mentions of people on a list, DMs to the bot, a channel, a keyword, a slash command…), pick the workflow, and check the route in plain words. Filters that take a list of people or channels let you choose a saved list or create one right there, typed or copied from an n8n data table, without leaving the route. **Try a message** shows whether a sample message would be forwarded or dropped, using the gateway's own logic. Routes start in **shadow** mode, which forwards everything and records what it *would* drop.
 7. **Check, then enforce.** Send a few test requests and watch the squares on the app's card (or the **Activity** page), which show each decision as it happens. When the drops are right, open the app and click **Switch to enforce**.
 
@@ -65,7 +63,9 @@ The console opens in your browser with a setup checklist that shows what's done 
 
 The route editor offers each of these as a starting point. One Slack app can feed several workflows: a message that matches two routes goes to both.
 
-## Other apps
+## Coming soon: GitHub, Telegram and any webhook
+
+The gateway already handles these, and the console has a connect flow for each, but they can't be picked in the console yet while they get tested against real repositories and bots. Here's how they will work.
 
 Each app gets its own address on the gateway, and its own secret, stored as a Worker secret.
 
@@ -127,6 +127,28 @@ Put the old n8n URL back in the Slack app's Event Subscriptions. The workflow wa
 | Counts of forwarded and dropped requests | Cloudflare Analytics Engine, in your account (kept 3 months). Message text is never recorded. Cloudflare samples bursts of requests, so counts are estimates, exact only at steady light volume |
 
 The console listens on `127.0.0.1` only. Every API call needs the random session token from the link the CLI opens. See [SECURITY.md](SECURITY.md).
+
+## Running the console on a server
+
+You don't need a server. The gateway runs on Cloudflare and keeps routing when the console is closed, so the usual way is to run `npx nottoday` on your laptop when you want to change something.
+
+If you'd rather manage it from an always-on machine, such as a VPS, run the console there and reach it through an SSH tunnel. It only listens on `127.0.0.1` and only answers to `127.0.0.1:<port>` or `localhost:<port>`, so it isn't reachable from the internet.
+
+On the server (Node.js 22.4 or later):
+
+```bash
+npx nottoday --port 4870 --no-open
+```
+
+It prints a link like `http://127.0.0.1:4870/#t=…`. On your own machine, open a tunnel with the **same port on both ends**, then open that link in your browser:
+
+```bash
+ssh -N -L 4870:127.0.0.1:4870 you@your-server
+```
+
+- Your Cloudflare and n8n tokens are saved on the server, in `~/.config/nottoday/state.json` of the user running the console. Use a machine you trust as much as your laptop.
+- To keep it running after you log out, start it in `tmux` or `screen`. The session token changes on every start, so take the new link each time.
+- Don't open the port to the internet or put it behind a public reverse proxy. The session token is the only thing protecting the API.
 
 ## Development
 
