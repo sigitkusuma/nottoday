@@ -126,29 +126,41 @@ Put the old n8n URL back in the Slack app's Event Subscriptions. The workflow wa
 | Routes, lists, config history | Cloudflare KV, in your account |
 | Counts of forwarded and dropped requests | Cloudflare Analytics Engine, in your account (kept 3 months). Message text is never recorded. Cloudflare samples bursts of requests, so counts are estimates, exact only at steady light volume |
 
-The console listens on `127.0.0.1` only. Every API call needs the random session token from the link the CLI opens. See [SECURITY.md](SECURITY.md).
+The console listens on `127.0.0.1` only, unless you [run it on a server](#running-the-console-on-a-server). Every API call needs the session token from the link the CLI prints. See [SECURITY.md](SECURITY.md).
 
 ## Running the console on a server
 
 You don't need a server. The gateway runs on Cloudflare and keeps routing when the console is closed, so the usual way is to run `npx nottoday` on your laptop when you want to change something.
 
-If you'd rather manage it from an always-on machine, such as a VPS, run the console there and reach it through an SSH tunnel. It only listens on `127.0.0.1` and only answers to `127.0.0.1:<port>` or `localhost:<port>`, so it isn't reachable from the internet.
+If you'd rather manage it from an always-on machine, such as a VPS, run the console there (Node.js 22.4 or later) in one of two ways.
 
-On the server (Node.js 22.4 or later):
-
-```bash
-npx nottoday --port 4870 --no-open
-```
-
-It prints a link like `http://127.0.0.1:4870/#t=…`. On your own machine, open a tunnel with the **same port on both ends**, then open that link in your browser:
+**Directly, over HTTPS:**
 
 ```bash
-ssh -N -L 4870:127.0.0.1:4870 you@your-server
+npx nottoday --host 0.0.0.0
 ```
 
+It prints a link like `https://203.0.113.5:4870/#t=…`. The console makes its own self-signed certificate, so the browser warns the first time; check that the certificate's SHA-256 fingerprint matches the one printed, then continue. The certificate is kept, so the warning doesn't come back on every start.
+
+- Open the port (4870, or your `--port`) in the server's firewall.
+- To use a domain name instead of the IP address, add `--allow-host console.example.com`. With a real certificate for it, add `--cert fullchain.pem --key privkey.pem` and the browser won't warn.
+- `--insecure-http` turns HTTPS off. Then anyone on the network path can read the link's token and use the console, so keep it for networks you trust.
+
+**Through Tailscale, private to your devices:**
+
+```bash
+npx nottoday --tailscale
+```
+
+The console stays on `127.0.0.1`, and `tailscale serve` shares it at `https://<machine>.<tailnet>.ts.net` with a real certificate. Only devices signed in to your tailnet can reach it, and no port is opened to the internet. It needs Tailscale running on the server (`tailscale up`) and on the device you browse from, with MagicDNS and HTTPS certificates turned on for the tailnet. On Linux, if `tailscale serve` says access denied, run `sudo tailscale set --operator=$USER` once. The share stops when the console stops.
+
+In both modes:
+
+- The link's token is the key to the console. It's kept between starts, so a bookmarked link keeps working; `--new-token` replaces it, and old links stop working.
 - Your Cloudflare and n8n tokens are saved on the server, in `~/.config/nottoday/state.json` of the user running the console. Use a machine you trust as much as your laptop.
-- To keep it running after you log out, start it in `tmux` or `screen`. The session token changes on every start, so take the new link each time.
-- Don't open the port to the internet or put it behind a public reverse proxy. The session token is the only thing protecting the API.
+- To keep it running after you log out, start it in `tmux` or as a systemd service.
+
+An SSH tunnel works too, with no flags: run `npx nottoday --no-open` on the server, `ssh -N -L 4870:127.0.0.1:4870 you@your-server` on your machine (same port on both ends), and open the printed link.
 
 ## Development
 

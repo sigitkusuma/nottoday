@@ -8,7 +8,7 @@ n8n counts an execution every time a trigger fires, and a Slack Trigger fires on
 npx nottoday
 ```
 
-This opens a local web console (on 127.0.0.1 only) that installs the gateway into your own Cloudflare account, connects your Slack apps, and sets up routes. It runs on Cloudflare's free plan. Requires Node.js 22.4 or later.
+This opens a local web console (on 127.0.0.1; see the full README for running it on a server) that installs the gateway into your own Cloudflare account, connects your Slack apps, and sets up routes. It runs on Cloudflare's free plan. Requires Node.js 22.4 or later.
 
 Full documentation, security notes and source: https://github.com/sigitkusuma/nottoday
 

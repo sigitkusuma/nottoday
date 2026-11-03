@@ -13,12 +13,21 @@ The token you create from the console's link has these permissions:
 
 Under **Account Resources**, limit the token to the one account you install into.
 
-## The local console
+## The console
 
-- It listens on `127.0.0.1` only, never on your network.
-- Every API call needs a random session token, generated at start and passed in the URL fragment of the link the CLI opens. Fragments aren't sent to servers or written to logs.
-- Requests with any `Host` header other than `127.0.0.1:<port>` or `localhost:<port>` are refused, which blocks DNS-rebinding attacks from web pages.
+- By default it listens on `127.0.0.1` only, never on your network.
+- Every API call needs a session token, passed in the URL fragment of the link the CLI prints. Fragments aren't sent to servers or written to logs. The token is compared in constant time.
+- Requests with a `Host` header other than the ones the console was started for are refused, which blocks DNS-rebinding attacks from web pages. By default those are `127.0.0.1:<port>` and `localhost:<port>`.
+- Responses forbid framing (`X-Frame-Options: DENY`) and send no referrer.
 - Tokens are stored in `~/.config/nottoday/state.json`, mode `0600`, in a `0700` directory. If `~/.config/slack-gateway` exists from before the rename and the new folder doesn't, that one is used instead. Set `NOTTODAY_HOME` to use another directory (`SLACK_GATEWAY_HOME` still works). If you save several Cloudflare accounts, all their tokens are in that one file. "Forget" removes a token from it; it doesn't revoke the token, which you do in Cloudflare (My Profile → API Tokens).
+
+### On a server
+
+- `--host <address>` makes the console reachable from other machines. It then also answers to any IP address on its port (a DNS-rebinding page needs a host name, so IP addresses are safe to allow) and to the names given with `--allow-host`.
+- It uses HTTPS: with `--cert`/`--key` if given, otherwise with a self-signed ECDSA P-256 certificate it makes and keeps in `tls/` in the state folder (mode `0600`). The CLI prints the certificate's SHA-256 fingerprint so you can check it before accepting the browser's warning; a mismatch means something between you and the server is answering in its place.
+- `--insecure-http` turns HTTPS off. The token then crosses the network in the clear with every request, and whoever reads it can do anything the console can, including with your Cloudflare token. Use it only on a network you trust.
+- `--tailscale` keeps the console on `127.0.0.1` and lets `tailscale serve` (in the foreground, so it ends with the console) proxy HTTPS from your tailnet to it. Only tailnet members can connect; the session token is still required.
+- In both server modes the session token is kept in `console-token` in the state folder (mode `0600`), so a saved link keeps working. `--new-token` replaces it. Anyone with the link can use the console, so treat it like a password.
 
 ## Real-time logs (live check and Activity)
 

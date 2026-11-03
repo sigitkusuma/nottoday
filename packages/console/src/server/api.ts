@@ -1,4 +1,4 @@
-/** The console's JSON API, used by the web UI. Only reachable from this machine with the session token. */
+/** The console's JSON API, used by the web UI. Only reachable with the session token. */
 
 import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";

@@ -1,12 +1,14 @@
 /**
- * The local web server: the API plus the built UI. It listens on 127.0.0.1
- * only, and every API call needs the random session token from the URL the
- * CLI opens, so other websites and other users on the machine can't use it.
+ * The console's web server: the API plus the built UI. It answers only to the
+ * host names it was started for, and every API call needs the session token
+ * from the link the CLI printed, so other websites, other users on the
+ * machine, and (in the server modes) other people on the network can't use it.
  */
 
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { Hono } from "hono";
+import { hostAllowed, localHosts, tokenMatches, type HostPolicy } from "./access";
 import { createApi, type ApiDeps } from "./api";
 
 const TYPES: Record<string, string> = {
@@ -21,22 +23,27 @@ const TYPES: Record<string, string> = {
 export interface AppOptions extends ApiDeps {
   sessionToken: string;
   port: number;
+  /** Host names to answer to; defaults to 127.0.0.1 and localhost with the port. */
+  hosts?: HostPolicy;
   /** Directory URL of the built UI; omitted in dev, where Vite serves it. */
   webRoot?: URL;
 }
 
 export function createApp(opts: AppOptions): Hono {
   const app = new Hono();
-  const allowedHosts = new Set([`127.0.0.1:${opts.port}`, `localhost:${opts.port}`]);
+  const hosts = opts.hosts ?? localHosts(opts.port);
 
   // Blocks DNS-rebinding: a hostile page can't reach us under its own host name.
   app.use("*", async (c, next) => {
-    if (!allowedHosts.has(c.req.header("host") ?? "")) return c.json({ error: "Forbidden host" }, 403);
+    if (!hostAllowed(c.req.header("host"), hosts)) return c.json({ error: "Forbidden host. To use this address, start the console with --allow-host <name>." }, 403);
+    c.header("x-frame-options", "DENY");
+    c.header("x-content-type-options", "nosniff");
+    c.header("referrer-policy", "no-referrer");
     await next();
   });
 
   app.use("/api/*", async (c, next) => {
-    if (c.req.header("x-session-token") !== opts.sessionToken) return c.json({ error: "Open the console from the link the CLI printed." }, 401);
+    if (!tokenMatches(c.req.header("x-session-token"), opts.sessionToken)) return c.json({ error: "Open the console from the link the CLI printed." }, 401);
     c.header("cache-control", "no-store");
     await next();
   });
