@@ -23,7 +23,7 @@ const STEPS = [
   { title: "Connect and test", headline: "Connect it and send a test", lead: "Finish in Slack, then post a message. This page confirms each step as it happens." },
 ] as const;
 
-export function ConnectSlackApp({ status, onCancel, onDone }: { status: Status; onCancel: () => void; onDone: (appKey: string) => void }) {
+export function ConnectSlackApp({ status, onCancel, onBack, onDone }: { status: Status; onCancel: () => void; onBack?: () => void; onDone: (appKey: string) => void }) {
   const { config, reload } = useConfig();
   const ids = useId();
   const [step, setStep] = useState(0);
@@ -106,7 +106,11 @@ export function ConnectSlackApp({ status, onCancel, onDone }: { status: Status; 
 
   return (
     <>
-      <PageHead title="Connect a Slack app" sub="Four short steps. The console confirms each one as it happens." back={{ label: "Back to Bots", onClick: onCancel }} />
+      <PageHead
+        title="Connect a Slack app"
+        sub="Four short steps. The console confirms each one as it happens."
+        back={saved || !onBack ? { label: "Back to Apps", onClick: onCancel } : { label: "Other kinds of apps", onClick: onBack }}
+      />
       <div className="wizard">
         <nav className="wizard-rail" aria-label="Steps">
           <ol>
@@ -428,7 +432,7 @@ export function ConnectSlackApp({ status, onCancel, onDone }: { status: Status; 
             )}
             {step === 3 && (
               <button type="button" className="btn" onClick={onCancel}>
-                Back to Bots
+                Back to Apps
               </button>
             )}
             {step < 2 && (

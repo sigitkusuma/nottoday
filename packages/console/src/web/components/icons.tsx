@@ -92,6 +92,16 @@ const paths: Record<string, ReactNode> = {
   eyeOff: <path d="m3 3 18 18M10.6 6.1A9.7 9.7 0 0 1 12 6c6.5 0 10 6 10 6a17 17 0 0 1-3.1 3.8M6.5 7.6C3.8 9.3 2 12 2 12s3.5 6 10 6c1.4 0 2.7-.3 3.8-.7M9.9 9.9a3 3 0 0 0 4.2 4.2" />,
   chevron: <path d="m6 9 6 6 6-6" />,
   x: <path d="M6 6l12 12M18 6 6 18" />,
+  branch: (
+    <>
+      <circle cx="6" cy="5" r="2" />
+      <circle cx="6" cy="19" r="2" />
+      <circle cx="18" cy="7" r="2" />
+      <path d="M6 7v10M18 9c0 5-6 4-11.5 8" />
+    </>
+  ),
+  send: <path d="M21 3 3 10.5l7 2.5 2.5 7L21 3ZM10 13l4.5-4.5" />,
+  link: <path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1" />,
 };
 
 export type IconName = keyof typeof paths;

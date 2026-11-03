@@ -105,14 +105,14 @@ export function SetupChecklist({
     },
     {
       id: "slack",
-      title: "Connect a Slack app",
+      title: "Connect an app",
       state: receiving ? "done" : "todo",
       detail: receiving
         ? `Receiving events from ${liveSignals.filter((s) => s.lastRequest && s.lastRequest !== s.lastVerified).map((s) => s.app).join(", ")}.`
         : apps.length
-          ? "Added, but no Slack event has arrived yet. Open the app to run the live check."
-          : "Add the Slack app whose events start your n8n workflow.",
-      action: { label: apps.length ? "Open Bots" : "Connect a Slack app", onClick: () => goTo(apps.length ? "apps" : "apps/new") },
+          ? "Added, but nothing has arrived yet. Open the app to run the live check."
+          : "Connect the app whose events start your n8n workflow: Slack, GitHub, Telegram or any webhook.",
+      action: { label: apps.length ? "Open Apps" : "Connect an app", onClick: () => goTo(apps.length ? "apps" : "apps/new") },
     },
     {
       id: "route",
@@ -122,7 +122,7 @@ export function SetupChecklist({
         ? "Tell the gateway which messages your workflow needs. New routes start in shadow mode."
         : routes.some((r) => (r.mode ?? "enforce") === "enforce")
           ? "At least one route is enforcing: executions are being saved."
-          : "Your route is in shadow mode: post a few test messages, check Activity, then switch it to enforce on the bot page.",
+          : "Your route is in shadow mode: post a few test messages, check Activity, then switch it to enforce on the app's page.",
       action: routes.length === 0 ? { label: "Add a route", onClick: () => goTo("apps") } : { label: "Open Activity", onClick: () => goTo("live") },
     },
   ];

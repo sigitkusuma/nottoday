@@ -614,6 +614,22 @@ button.tile:disabled { opacity: 0.5; cursor: not-allowed; }
 .acct-actions { margin-top: auto; }
 .acct-card .kv { margin: 0; }
 
+/* ---------- More than Slack: app picker, conditions, source tags ---------- */
+.source-tiles { grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr)); margin-bottom: 14px; max-width: 900px; }
+.source-tiles .tile { padding: 18px; }
+.bot-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 3px; }
+.bot-title .bot-tags .pill { margin-top: 0; }
+.source-tag { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); font-size: 12px; font-weight: 500; color: var(--muted); white-space: nowrap; }
+.stack-sm { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
+.stack-sm .copy { max-width: none; }
+.field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0 12px; }
+.conditions { display: grid; gap: 8px; justify-items: start; }
+.cond-row { width: 100%; display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.9fr) minmax(0, 1.3fr) auto; gap: 8px; align-items: start; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
+.cond-row select, .cond-row input { max-width: none; }
+.cond-field, .cond-value { display: grid; gap: 6px; min-width: 0; }
+@media (max-width: 640px) { .cond-row { grid-template-columns: minmax(0, 1fr) auto; } .cond-row > :nth-child(2), .cond-row > .cond-value { grid-column: 1; } .cond-row > .icon-btn { grid-row: 1; grid-column: 2; } }
+textarea.payload { min-height: 140px; max-width: none; margin-bottom: 4px; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
   .bot-card:hover { transform: none; }

@@ -1,17 +1,19 @@
 /**
- * Watches the gateway in real time while someone connects a Slack app, and
- * says which step is confirmed and what to check when nothing arrives. These
- * are the mistakes from real setups: Socket Mode on, URL not verified, bot not
- * in the channel, wrong signing secret, wrong app name in the URL.
+ * Watches the gateway in real time while someone connects an app, and says
+ * which step is confirmed and what to check when nothing arrives. For Slack
+ * these are the mistakes from real setups: Socket Mode on, URL not verified,
+ * bot not in the channel, wrong signing secret, wrong app name in the URL.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import type { SourceType } from "@gw/shared";
+import { sourceInfo } from "../sources";
 import { useLive, type LiveEvent } from "../useLive";
 import { timeAgo } from "./ui";
 
 const HINT_AFTER_MS = 45_000;
 
-export function LiveCheck({ appKey, botHandle, compact }: { appKey: string; botHandle?: string; compact?: boolean }) {
+export function LiveCheck({ appKey, botHandle, compact, source = "slack" }: { appKey: string; botHandle?: string; compact?: boolean; source?: SourceType }) {
   const live = useLive();
   const [startedAt] = useState(() => Date.now());
   const [now, setNow] = useState(() => Date.now());
@@ -28,6 +30,10 @@ export function LiveCheck({ appKey, botHandle, compact }: { appKey: string; botH
   const missingSecret = mine.some((e) => e.kind === "missing_secret");
   const unknown = live.events.find((e) => e.kind === "unknown_app");
   const waitedLong = now - startedAt > HINT_AFTER_MS;
+
+  if (source !== "slack" && live.state !== "unavailable") {
+    return <SourceLiveCheck appKey={appKey} source={source} botHandle={botHandle} compact={compact} mine={mine} waitedLong={waitedLong} liveState={live.state} unknown={unknown} />;
+  }
 
   if (live.state === "unavailable") {
     return (
@@ -124,9 +130,9 @@ function RecentForApp({ events }: { events: LiveEvent[] }) {
 export function describe(e: LiveEvent): string {
   switch (e.kind) {
     case "verified":
-      return "Slack checked the Request URL: verified.";
+      return e.source === "github" ? "GitHub sent its ping: verified." : "Slack checked the Request URL: verified.";
     case "bad_signature":
-      return "Rejected: bad signature (wrong signing secret?).";
+      return e.source && e.source !== "slack" ? "Rejected: bad signature (wrong secret?)." : "Rejected: bad signature (wrong signing secret?).";
     case "unknown_app":
       return `Rejected: unknown app name "${e.app}".`;
     case "missing_secret":
@@ -148,4 +154,105 @@ export function describe(e: LiveEvent): string {
         .join("; ")}.`;
     }
   }
+}
+
+const STEPS: Record<Exclude<SourceType, "slack">, { ping?: [string, string]; first: [string, (bot?: string) => string]; hints: ReactNode[] }> = {
+  github: {
+    ping: ["GitHub sent its ping", "GitHub sends a ping when the webhook is added. Webhooks → your webhook → Recent Deliveries can redeliver it."],
+    first: ["First event arrived", () => "Do whatever the webhook sends: push a commit, open an issue or a pull request."],
+    hints: [
+      <>
+        The <b>Payload URL</b> ends in the address above, and the webhook is <b>Active</b>.
+      </>,
+      <>
+        The <b>Secret</b> was pasted exactly. A wrong one shows as a red "bad signature" here.
+      </>,
+      <>
+        In <b>Recent Deliveries</b>, GitHub shows each delivery and the gateway's response.
+      </>,
+    ],
+  },
+  telegram: {
+    first: ["First update arrived", (bot) => (bot ? `Send /start, or any message, to @${bot} in Telegram.` : "Send /start, or any message, to the bot in Telegram.")],
+    hints: [
+      "You messaged the bot you connected, not another one.",
+      <>
+        Nothing pointed the bot elsewhere since: an <b>active n8n workflow with a Telegram Trigger</b> for this bot takes the webhook back when it starts. Use a Webhook node instead, then reconnect the bot on its app page.
+      </>,
+      "In a group, the bot only sees messages if it was added and privacy mode allows it (BotFather → /setprivacy).",
+    ],
+  },
+  webhook: {
+    first: ["First request arrived", () => "Trigger something in the service, or use its \"send a test\" button."],
+    hints: [
+      "The service sends to the exact URL above, as a POST.",
+      "The secret matches what the service uses. A wrong one shows as a red \"bad signature\" here.",
+      "Most services keep a delivery log in their webhook settings, with the response they got.",
+    ],
+  },
+};
+
+function SourceLiveCheck({
+  appKey,
+  source,
+  botHandle,
+  compact,
+  mine,
+  waitedLong,
+  liveState,
+  unknown,
+}: {
+  appKey: string;
+  source: Exclude<SourceType, "slack">;
+  botHandle?: string;
+  compact?: boolean;
+  mine: LiveEvent[];
+  waitedLong: boolean;
+  liveState: string;
+  unknown?: LiveEvent;
+}) {
+  const info = sourceInfo(source);
+  const steps = STEPS[source];
+  const verified = mine.some((e) => e.kind === "verified");
+  const firstEvent = mine.find((e) => e.kind === "event");
+  const badSignature = mine.find((e) => e.kind === "bad_signature");
+  const done = Boolean(firstEvent) && !badSignature;
+  return (
+    <div className="live-check" aria-live="polite">
+      <div className="spread">
+        <strong>{done ? `Live check: ${info.label} is connected` : compact ? "Live check" : `Live check: waiting for ${info.sender}`}</strong>
+        <span className={liveState === "live" ? "status-ok small" : "muted small"}>{liveState === "live" ? "Connected, watching the gateway" : "Connecting…"}</span>
+      </div>
+      <ul className="checklist compact">
+        {steps.ping && <Check ok={verified || Boolean(firstEvent)} label={steps.ping[0]} pending={steps.ping[1]} />}
+        <Check
+          ok={Boolean(firstEvent)}
+          label={firstEvent ? `${steps.first[0]} (${firstEvent.type || info.noun}, ${timeAgo(firstEvent.time)})` : steps.first[0]}
+          pending={steps.first[1](botHandle)}
+        />
+        <Check ok={!badSignature && (verified || Boolean(firstEvent))} failed={Boolean(badSignature)} label={badSignature ? "Signature check failed" : "Signatures check out"} pending="Confirmed with the first request." />
+      </ul>
+      {badSignature && (
+        <div className="notice error small" role="alert">
+          {info.sender === "the service" ? "The service's" : `${info.sender}'s`} requests don't match the secret stored for <code>{appKey}</code>. {source === "telegram" ? "Reconnect the bot on its app page." : "Check the secret, or replace it on the app page."}
+        </div>
+      )}
+      {unknown && unknown.app !== appKey && (
+        <div className="notice warn small" role="alert">
+          A request came in for <code>{unknown.app}</code>, which the gateway doesn't know. Check the URL ends in <code>/{appKey}</code>.
+        </div>
+      )}
+      {waitedLong && !firstEvent && !badSignature && (
+        <div className="notice warn small">
+          <strong>Nothing from {info.sender} yet.</strong> Check, in this order:
+          <ol className="steps" style={{ marginTop: 6 }}>
+            {steps.hints.map((h, i) => (
+              <li key={i}>{h}</li>
+            ))}
+          </ol>
+        </div>
+      )}
+      {mine.length > 0 && !compact && <RecentForApp events={mine} />}
+    </div>
+  );
 }

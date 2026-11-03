@@ -4,6 +4,8 @@
  * and the reason behind it. Pure: also used by the tests.
  */
 
+import { sourceOf } from "@gw/shared";
+import { sourceInfo } from "./sources";
 import type { AppConfig, AppSignal, RouteSummary } from "./types";
 import type { LiveEvent } from "./useLive";
 
@@ -46,16 +48,24 @@ export function lastSeen(signal: AppSignal | undefined, live: LiveEvent[], key: 
 export function botStatus(i: BotInput): BotStatus {
   const now = i.now ?? Date.now();
   const mine = i.live.filter((e) => e.app === i.key);
+  const slack = sourceOf(i.app) === "slack";
+  const info = sourceInfo(sourceOf(i.app));
+  const Sender = info.sender.charAt(0).toUpperCase() + info.sender.slice(1);
 
   if (i.missingSecret) {
-    return { health: "no-secret", tone: "bad", label: "Needs signing secret", detail: "The gateway has no signing secret for this bot, so Slack's requests are refused." };
+    return { health: "no-secret", tone: "bad", label: slack ? "Needs signing secret" : "Needs its secret", detail: `The gateway has no secret for this app, so ${info.sender}'s requests are refused.` };
   }
   const badLive = mine.find((e) => e.kind === "bad_signature");
   const goodLive = mine.find((e) => e.kind === "event" || e.kind === "verified");
   const badAt = Math.max(ts(i.signal?.lastBadSignature), badLive ? ts(badLive.time) : 0);
   const goodAt = Math.max(ts(i.signal?.lastRequest), ts(i.signal?.lastVerified), goodLive ? ts(goodLive.time) : 0);
   if (badAt && badAt > goodAt) {
-    return { health: "bad-secret", tone: "bad", label: "Wrong signing secret", detail: "Slack's requests fail the signature check. Replace the signing secret." };
+    return {
+      health: "bad-secret",
+      tone: "bad",
+      label: slack ? "Wrong signing secret" : "Wrong secret",
+      detail: `${Sender}'s requests fail the signature check. ${slack ? "Replace the signing secret." : sourceOf(i.app) === "telegram" ? "Reconnect the bot." : "Replace the secret."}`,
+    };
   }
   // Stats cover days; errors from a route that has since been turned off or removed aren't a problem now.
   const active = new Set(i.app.routes.filter((r) => r.enabled !== false).map((r) => r.name));
@@ -68,12 +78,12 @@ export function botStatus(i: BotInput): BotStatus {
   }
   const seen = lastSeen(i.signal, i.live, i.key);
   if (seen && now - seen <= RECEIVING_WINDOW_MS) {
-    return { health: "receiving", tone: "ok", label: "Receiving", detail: "Slack is sending events and the gateway is routing them." };
+    return { health: "receiving", tone: "ok", label: "Receiving", detail: `${Sender} is sending ${info.noun}s and the gateway is routing them.` };
   }
   if (seen) {
     return { health: "quiet", tone: "ok", label: "Healthy, quiet", detail: "Working. Nothing has arrived in the last few minutes." };
   }
-  return { health: "waiting", tone: "warn", label: "Waiting for Slack", detail: "No Slack event has arrived yet. Open the bot to run the live check." };
+  return { health: "waiting", tone: "warn", label: slack ? "Waiting for Slack" : `Waiting for ${info.sender === "the service" ? "requests" : info.sender}`, detail: `No ${info.noun} from ${info.sender} has arrived yet. Open the app to run the live check.` };
 }
 
 const STATUS_HINT: [(s: number) => boolean, string][] = [

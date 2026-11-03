@@ -1,6 +1,6 @@
 /**
  * Home: how many n8n executions the gateway saves, anything that needs a look,
- * and every bot as a card with its live status.
+ * and every connected app as a card with its live status.
  */
 
 import { api } from "../api";
@@ -40,7 +40,7 @@ export function Dashboard({ status, onStatusChange, goTo }: { status: Status; on
     <div className="page">
       <PageHead
         title="Dashboard"
-        sub="What the gateway has saved you, and whether every bot is working."
+        sub="What the gateway has saved you, and whether every app is working."
         actions={
           gw.statsEnabled && (
             <>
@@ -96,7 +96,7 @@ export function Dashboard({ status, onStatusChange, goTo }: { status: Status; on
             <div className="kpi">
               <div className="kpi-label">Sent to n8n</div>
               <div className="kpi-value">{stats.routes ? fmt(sent) : "…"}</div>
-              <div className="kpi-note">of {fmt(received)} Slack requests matched a route</div>
+              <div className="kpi-note">of {fmt(received)} requests matched a route</div>
             </div>
           </>
         ) : (
@@ -107,7 +107,7 @@ export function Dashboard({ status, onStatusChange, goTo }: { status: Status; on
           </div>
         )}
         <div className="kpi">
-          <div className="kpi-label">Bots working</div>
+          <div className="kpi-label">Apps working</div>
           <div className="kpi-value">
             {healthy}
             <span className="faint" style={{ fontSize: 18 }}> / {bots.length}</span>
@@ -126,7 +126,7 @@ export function Dashboard({ status, onStatusChange, goTo }: { status: Status; on
       <ErrorNotice error={stats.error} />
 
       <div className="spread" style={{ margin: "6px 0 10px" }}>
-        <h3 style={{ margin: 0 }}>Your bots</h3>
+        <h3 style={{ margin: 0 }}>Your apps</h3>
         <PulseLegend />
       </div>
       <div className="bot-grid">
@@ -148,10 +148,10 @@ export function Dashboard({ status, onStatusChange, goTo }: { status: Status; on
         </button>
       </div>
       {live.events.length === 0 ? (
-        <Empty title={live.state === "unavailable" ? "Live activity isn't available" : "Waiting for the next Slack request"}>
+        <Empty title={live.state === "unavailable" ? "Live activity isn't available" : "Waiting for the next request"}>
           {live.state === "unavailable"
             ? `${live.message ?? ""} The Activity page falls back to stats, which lag a minute or two.`
-            : "Post a message in a channel one of your bots is in. It appears here within a second or two."}
+            : "Send something from a connected app, e.g. a Slack message or a GitHub push. It appears here within a second or two."}
         </Empty>
       ) : (
         <div className="feed">

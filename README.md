@@ -2,24 +2,26 @@
 
 **Saving your n8n executions, one "nope" at a time.**
 
-A Slack gateway for n8n: it says "not today" to every Slack request no workflow needs, so it never becomes an n8n execution.
+A webhook gateway for n8n, for **Slack, GitHub, Telegram, or any webhook**. It says "not today" to every request no workflow needs, so it never becomes an n8n execution.
 
 n8n counts an execution every time a trigger fires. A Slack Trigger fires on every message, edit, reaction and bot post in every channel your Slack bot is in, even when the workflow only cares about a few of them and stops at its first check. A busy workspace can use most of a monthly execution quota this way.
 
-This tool puts a small Cloudflare Worker between Slack and n8n. It checks Slack's signature, answers Slack at once, and forwards only the requests a workflow acts on. Everything it drops is an execution you don't pay for. It works for any Slack-triggered workflow: alerts, assistants, triage, slash commands, buttons.
+The same goes for GitHub (every push, comment and CI run), Telegram bots in busy groups, and webhooks from other services.
+
+This tool puts a small Cloudflare Worker between those apps and n8n. It checks each request's signature, answers at once, and forwards only the requests a workflow acts on. Everything it drops is an execution you don't pay for.
 
 ```
-Slack app ──► https://<your-worker>.workers.dev/slack/<app>
-                 ├─ checks the signature, replies 200 to Slack right away
+Slack, GitHub, Telegram, a webhook ──► https://<your-worker>.workers.dev/<slack|github|telegram|hook>/<app>
+                 ├─ checks the signature or secret, replies 200 right away
                  ├─ forwards matching requests to n8n, unchanged
                  └─ drops the rest (counted, never sent)
 ```
 
-- **No n8n changes.** Requests are forwarded byte for byte with Slack's signature headers, so an existing Slack Trigger node keeps working as-is.
+- **No n8n changes for Slack.** Requests are forwarded byte for byte with Slack's signature headers, so an existing Slack Trigger node keeps working as-is. For GitHub, Telegram and webhooks, the workflow starts from a plain Webhook node (see [Other apps](#other-apps)).
 - **Free.** It runs on the Cloudflare Workers free plan (100,000 requests a day) in your own account.
 - **Local console.** `npx nottoday` opens a web UI on your machine. Your tokens stay on your machine.
 
-![Dashboard: executions saved, and every bot with its live status](docs/screenshots/dashboard.png)
+![Dashboard: executions saved, and every app with its live status](docs/screenshots/dashboard.png)
 
 <table>
   <tr>
@@ -46,9 +48,9 @@ The console opens in your browser with a setup checklist that shows what's done 
 2. **Install.** One click creates the Worker, its settings store and its `workers.dev` address.
 3. **Turn on stats** (optional, free). Cloudflare needs one Analytics Engine dataset; the console shows the exact name to use. Routing works without it.
 4. **Connect n8n** (optional). Counts executions per workflow, so you can see which ones to fix, and lets you pick trigger URLs from a list.
-5. **Connect a Slack app.** A four-step wizard. For a new app, one button opens Slack with everything filled in from a manifest: the gateway's Request URL, the events, the permissions, and Socket Mode off (with Socket Mode on, Slack never calls the URL). You paste the Signing Secret, click Verify in Slack, and a **live check** confirms each step within seconds: URL verified, first event arrived, signatures OK. For an existing app, the wizard gives you a checklist instead; save its old Request URL first, since putting it back is your rollback.
+5. **Connect an app.** Pick Slack, GitHub, Telegram or any webhook. For Slack it's a four-step wizard. For a new app, one button opens Slack with everything filled in from a manifest: the gateway's Request URL, the events, the permissions, and Socket Mode off (with Socket Mode on, Slack never calls the URL). You paste the Signing Secret, click Verify in Slack, and a **live check** confirms each step within seconds: URL verified, first event arrived, signatures OK. For an existing app, the wizard gives you a checklist instead; save its old Request URL first, since putting it back is your rollback. The other apps are covered [below](#other-apps).
 6. **Add a route.** Pick what should reach the workflow (mentions of people on a list, DMs to the bot, a channel, a keyword, a slash command…), pick the workflow, and check the route in plain words. Filters that take a list of people or channels let you choose a saved list or create one right there, typed or copied from an n8n data table, without leaving the route. **Try a message** shows whether a sample message would be forwarded or dropped, using the gateway's own logic. Routes start in **shadow** mode, which forwards everything and records what it *would* drop.
-7. **Check, then enforce.** Post a few test messages and watch the squares on the bot card (or the **Activity** page), which show each decision as it happens. When the drops are right, open the bot and click **Switch to enforce**.
+7. **Check, then enforce.** Send a few test requests and watch the squares on the app's card (or the **Activity** page), which show each decision as it happens. When the drops are right, open the app and click **Switch to enforce**.
 
 ## Common uses
 
@@ -62,6 +64,28 @@ The console opens in your browser with a setup checklist that shows what's done 
 | Slash commands, approval buttons, modal forms | A slash command / button clicks | Nothing extra; you still get one place to see and route them |
 
 The route editor offers each of these as a starting point. One Slack app can feed several workflows: a message that matches two routes goes to both.
+
+## Other apps
+
+Each app gets its own address on the gateway, and its own secret, stored as a Worker secret.
+
+| App | Address | How requests are checked | Connecting it |
+|---|---|---|---|
+| GitHub | `/github/<app>` | `X-Hub-Signature-256` with a secret the console generates | Add a webhook in the repository or organization settings: Payload URL, content type `application/json`, the secret. GitHub's ping shows up in the live check. |
+| Telegram | `/telegram/<app>` | The secret token Telegram sends with every update | Paste the bot token from BotFather once. The console points the bot at the gateway with a fresh secret token; the bot token isn't saved. |
+| Any webhook | `/hook/<app>` | An HMAC signature (hex or base64, any header), a secret header, or a secret in the URL | Presets for GitHub-style signatures, Shopify, Linear, Typeform and GitLab, or set it up yourself. |
+
+**In n8n, start these workflows with a Webhook node (POST), not n8n's GitHub or Telegram trigger.** Those triggers register their own webhook with GitHub or Telegram, which goes around the gateway. Telegram allows only one webhook per bot, so an active Telegram Trigger even takes it back.
+
+Routes for these apps pick events by name (GitHub's `push` or `pull_request`, Telegram's `message` or `callback_query`, a webhook's event field) and add **conditions** on any field of the request: is, is not, is one of (a saved list or typed values), matches a pattern, is present, is missing. Starting points:
+
+| App | Templates |
+|---|---|
+| GitHub | Pushes to a branch (not by bots), pull requests opened or merged, new issues, comments from people, failed workflow runs, published releases |
+| Telegram | Messages to the bot, a bot command, group messages that mention the bot, button presses |
+| Any webhook | Only when a field matches, or everything |
+
+**Try a payload** checks a pasted request body against the route with the gateway's own code. GitHub keeps recent deliveries under Settings → Webhooks, which makes good test material.
 
 ## The one rule
 

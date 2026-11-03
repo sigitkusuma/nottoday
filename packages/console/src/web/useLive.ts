@@ -16,6 +16,8 @@ export interface LiveEvent {
   time: string;
   kind: "verified" | "bad_signature" | "unknown_app" | "missing_secret" | "event" | "error";
   app?: string;
+  /** slack, github, telegram or webhook; absent from engines before 0.3.0 (Slack). */
+  source?: string;
   type?: string;
   subtype?: string;
   channel?: string;

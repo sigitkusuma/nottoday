@@ -9,12 +9,15 @@ import { useEffect, useState, type ReactNode } from "react";
 import { api } from "../api";
 import type { ListField } from "../listPicker";
 import { summarizeRoute } from "../routeSummary";
+import { sourceInfo } from "../sources";
+import { sourceOf, type Condition, type SourceType } from "@gw/shared";
 import type { EventFilters, GatewayConfig, ListRef, Route, Status, TriggerNode } from "../types";
 import { Icon, type IconName } from "./icons";
 import { ListPicker } from "./ListPicker";
 import { Chip, Toggle } from "./parts";
 import { ROUTE_TEMPLATES } from "./templates";
-import { TryMessage } from "./TryMessage";
+import { TryMessage, TryPayload } from "./TryMessage";
+import { ConditionsEditor } from "./ConditionsEditor";
 import { ErrorNotice, Field, splitList, useAction } from "./ui";
 
 export interface RouteDraft {
@@ -70,13 +73,26 @@ export function RouteEditor({
   onSave: (route: Route) => Promise<void>;
   onCancel: () => void;
 }) {
-  const initial: Route = route ?? {
-    name: draft?.name ?? "",
-    mode: "shadow",
-    on: { type: "event", events: draft?.events ?? ["message"] },
-    filters: { ignoreBots: true },
-    forwardTo: draft?.forwardTo ?? "",
-  };
+  const app = config.apps[appKey];
+  const source = sourceOf(app);
+  const isSlack = source === "slack";
+  const info = sourceInfo(source);
+  // Slack routes start from Slack's templates; other sources from their own.
+  const templates: { id: string; label: string; example: string; on: Route["on"]; filters?: EventFilters; match?: Route["match"]; respond?: "proxy"; todo?: string }[] = isSlack
+    ? ROUTE_TEMPLATES
+    : info.templates;
+  const initial: Route =
+    route ??
+    (isSlack
+      ? {
+          name: draft?.name ?? "",
+          mode: "shadow",
+          on: { type: "event", events: draft?.events ?? ["message"] },
+          filters: { ignoreBots: true },
+          forwardTo: draft?.forwardTo ?? "",
+        }
+      : // A draft's suggested events come from a Slack Trigger, so they don't apply here.
+        { name: draft?.name ?? "", mode: "shadow", on: { type: "event", events: ["*"] }, forwardTo: draft?.forwardTo ?? "" });
   const [r, setR] = useState<Route>(structuredClone(initial));
   const [eventsText, setEventsText] = useState(r.on.type === "event" ? r.on.events.join(", ") : "message");
   const [listTexts, setListTexts] = useState<Record<string, string>>(Object.fromEntries(LIST_FIELDS.map(([k]) => [k, listRefText(r.filters?.[k])])));
@@ -85,17 +101,25 @@ export function RouteEditor({
   const [templateId, setTemplateId] = useState(route ? "custom" : "");
   const [fineTuneOpen, setFineTuneOpen] = useState(Boolean(route));
   const action = useAction();
-  const template = ROUTE_TEMPLATES.find((t) => t.id === templateId);
+  const template = templates.find((t) => t.id === templateId);
   const lists = Object.keys(config.lists);
+  // A Slack Trigger node only understands Slack's requests.
+  const usableTriggers = (triggers ?? []).filter((t) => isSlack || t.kind === "webhook");
 
   const applyTemplate = (id: string) => {
     setTemplateId(id);
-    const t = ROUTE_TEMPLATES.find((x) => x.id === id);
+    const t = templates.find((x) => x.id === id);
     if (!t) {
       setFineTuneOpen(true);
       return;
     }
-    setR((prev) => ({ ...prev, on: structuredClone(t.on), filters: t.filters ? structuredClone(t.filters) : undefined, respond: t.respond }));
+    setR((prev) => ({
+      ...prev,
+      on: structuredClone(t.on),
+      filters: t.filters ? structuredClone(t.filters) : undefined,
+      match: t.match ? structuredClone(t.match) : undefined,
+      respond: t.respond,
+    }));
     if (t.on.type === "event") setEventsText(t.on.events.join(", "));
     setListTexts(Object.fromEntries(LIST_FIELDS.map(([k]) => [k, listRefText(t.filters?.[k])])));
     // Templates that still need input open the fine-tuning section.
@@ -120,7 +144,11 @@ export function RouteEditor({
 
   const build = (): Route => {
     const out: Route = structuredClone(r);
-    if (out.on.type === "event") {
+    if (!isSlack) {
+      const events = splitList(eventsText);
+      out.on = { type: "event", events: events.length ? events : ["*"] };
+      delete out.filters;
+    } else if (out.on.type === "event") {
       out.on = { type: "event", events: splitList(eventsText) };
       const filters: EventFilters = { ...out.filters };
       for (const [k] of LIST_FIELDS) filters[k] = parseListRef(listTexts[k] ?? "");
@@ -130,6 +158,9 @@ export function RouteEditor({
     } else {
       delete out.filters;
     }
+    const match = out.match?.filter((c) => c.field.trim());
+    if (match?.length) out.match = match;
+    else delete out.match;
     if (!out.description) delete out.description;
     if (out.respond === "ack") delete out.respond;
     if (out.enabled !== false) delete out.enabled;
@@ -139,7 +170,7 @@ export function RouteEditor({
   const built = build();
   const chosen = templateId !== "";
   const [picking, setPicking] = useState(false);
-  const activeFilters = Object.keys(built.filters ?? {}).length;
+  const activeFilters = Object.keys(built.filters ?? {}).length + (built.match?.length ?? 0);
   // New routes number the template step first; editing starts at the destination.
   const n = route ? 0 : 1;
 
@@ -169,7 +200,7 @@ export function RouteEditor({
               {chosen && !picking ? (
                 <div className="picked">
                   <span className="tile-icon" aria-hidden="true">
-                    <Icon name={TEMPLATE_ICON[templateId] ?? "sliders"} />
+                    <Icon name={TEMPLATE_ICON[templateId] ?? (isSlack ? "sliders" : info.icon)} />
                   </span>
                   <span className="picked-text">
                     <strong>{template?.label ?? "Something else"}</strong>
@@ -181,7 +212,7 @@ export function RouteEditor({
                 </div>
               ) : (
                 <div className="tiles" role="radiogroup" aria-labelledby="step-what">
-                  {[...ROUTE_TEMPLATES, { id: "custom", label: "Something else", example: "Start blank and set the filters yourself." }].map((t) => (
+                  {[...templates, { id: "custom", label: "Something else", example: "Start blank and set the filters yourself." }].map((t) => (
                     <label key={t.id} className={`tile${templateId === t.id ? " selected" : ""}`}>
                       <input
                         type="radio"
@@ -193,7 +224,7 @@ export function RouteEditor({
                         }}
                       />
                       <span className="tile-icon" aria-hidden="true">
-                        <Icon name={TEMPLATE_ICON[t.id] ?? "sliders"} />
+                        <Icon name={TEMPLATE_ICON[t.id] ?? (t.id === "custom" ? "sliders" : info.icon)} />
                       </span>
                       <strong>{t.label}</strong>
                       <span className="small">{t.example}</span>
@@ -207,18 +238,18 @@ export function RouteEditor({
           {chosen && (
             <>
               <Block n={n + 1} id="step-where" title="Where should it go?">
-                {triggers && triggers.length > 0 && (
+                {usableTriggers.length > 0 && (
                   <Field label="Pick a trigger from n8n" hint="Fills in the URL below and suggests a name.">
                     <select
-                      value={triggers.some((t) => t.url === r.forwardTo) ? r.forwardTo : ""}
+                      value={usableTriggers.some((t) => t.url === r.forwardTo) ? r.forwardTo : ""}
                       onChange={(e) => {
-                        const t = triggers.find((x) => x.url === e.target.value);
+                        const t = usableTriggers.find((x) => x.url === e.target.value);
                         if (!t) return;
                         setR({ ...r, forwardTo: t.url, name: r.name || slug(t.workflowName) });
                       }}
                     >
                       <option value="">Choose a workflow trigger…</option>
-                      {triggers.map((t) => (
+                      {usableTriggers.map((t) => (
                         <option key={t.url} value={t.url}>
                           {t.workflowName} — {t.nodeName} ({t.kind === "slack" ? "Slack Trigger" : "Webhook"})
                         </option>
@@ -229,9 +260,11 @@ export function RouteEditor({
                 <Field
                   label="n8n production URL"
                   hint={
-                    status.n8n
-                      ? "The trigger's Production URL. Requests arrive unchanged with Slack's signature, so the node works as before."
-                      : "The Slack Trigger or Webhook node's Production URL, e.g. https://<n8n>/webhook/<id>/webhook. Connect n8n (Settings) to pick it from a list instead."
+                    !isSlack
+                      ? `A Webhook node's Production URL (POST). Not n8n's ${info.label} Trigger node: it registers its own webhook with ${info.label}, which the gateway replaces. Requests arrive unchanged, with ${info.label}'s headers.`
+                      : status.n8n
+                        ? "The trigger's Production URL. Requests arrive unchanged with Slack's signature, so the node works as before."
+                        : "The Slack Trigger or Webhook node's Production URL, e.g. https://<n8n>/webhook/<id>/webhook. Connect n8n (Settings) to pick it from a list instead."
                   }
                 >
                   <input type="url" value={r.forwardTo} onChange={(e) => setR({ ...r, forwardTo: e.target.value })} placeholder="https://your-n8n/webhook/…" required />
@@ -252,13 +285,24 @@ export function RouteEditor({
                   <summary>
                     <span>
                       {fineTuneOpen ? "Hide filters" : "Show filters"}
-                      {built.on.type === "event" && <span className="muted small"> · {activeFilters === 0 ? "none set" : `${activeFilters} on`}</span>}
+                      {(built.on.type === "event" || !isSlack) && <span className="muted small"> · {activeFilters === 0 ? "none set" : `${activeFilters} on`}</span>}
                     </span>
                     <span className="chev">
                       <Icon name="chevron" size={16} />
                     </span>
                   </summary>
                   <div className="disclosure-body">
+                    {!isSlack ? (
+                      <SourceFilters
+                        source={source}
+                        eventsText={eventsText}
+                        setEventsText={setEventsText}
+                        conditions={r.match ?? []}
+                        setConditions={(match) => setR({ ...r, match })}
+                        lists={lists}
+                        hasEventField={source !== "webhook" || Boolean(app.eventField)}
+                      />
+                    ) : (
                     <FineTune
                       r={r}
                       setR={setR}
@@ -271,6 +315,7 @@ export function RouteEditor({
                       setListTexts={setListTexts}
                       n8nConnected={Boolean(status.n8n)}
                     />
+                    )}
                   </div>
                 </details>
               </Block>
@@ -291,12 +336,14 @@ export function RouteEditor({
                   </label>
                 </div>
                 <div className="toggles">
-                  <Toggle
-                    checked={r.respond === "proxy"}
-                    onChange={(on) => setR({ ...r, respond: on ? "proxy" : undefined })}
-                    title="Wait for n8n's reply and return it to Slack"
-                    hint="For slash commands and modals that answer directly. Leave off otherwise."
-                  />
+                  {source !== "github" && (
+                    <Toggle
+                      checked={r.respond === "proxy"}
+                      onChange={(on) => setR({ ...r, respond: on ? "proxy" : undefined })}
+                      title={`Wait for n8n's reply and return it to ${isSlack ? "Slack" : info.label === "Any webhook" ? "the sender" : info.label}`}
+                      hint={isSlack ? "For slash commands and modals that answer directly. Leave off otherwise." : "Only when the workflow's reply must go back in the same request. Leave off otherwise."}
+                    />
+                  )}
                   <Toggle checked={r.enabled !== false} onChange={(on) => setR({ ...r, enabled: on ? undefined : false })} title="Enabled" hint="Turn off to keep the route but stop forwarding." />
                 </div>
               </Block>
@@ -317,11 +364,11 @@ export function RouteEditor({
             <div className="preview">
               <h3>What this route does</h3>
               <div className="summary-box" aria-live="polite">
-                {summarizeRoute(built).map((s) => (
+                {summarizeRoute(built, source).map((s) => (
                   <p key={s}>{s}</p>
                 ))}
               </div>
-              {built.on.type === "event" && <TryMessage route={built} lists={config.lists} />}
+              {!isSlack ? <TryPayload route={built} app={app} lists={config.lists} /> : built.on.type === "event" && <TryMessage route={built} lists={config.lists} />}
             </div>
           </aside>
         )}
@@ -495,6 +542,55 @@ function FineTune(p: {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function SourceFilters(p: {
+  source: SourceType;
+  eventsText: string;
+  setEventsText: (s: string) => void;
+  conditions: Condition[];
+  setConditions: (c: Condition[]) => void;
+  lists: string[];
+  hasEventField: boolean;
+}) {
+  const info = sourceInfo(p.source);
+  const events = splitList(p.eventsText).filter((e) => e !== "*");
+  const known = new Set(info.events.map((e) => e.value));
+  const others = events.filter((e) => !known.has(e));
+  const setEvents = (next: string[]) => p.setEventsText(next.length ? next.join(", ") : "*");
+  return (
+    <div className="tune">
+      <div className="tune-group">
+        <h4 className="tune-title" id="tune-events">
+          Which {info.noun}s
+        </h4>
+        {p.hasEventField ? (
+          <>
+            <p className="tune-hint">None selected means every {info.noun}.</p>
+            {info.events.length > 0 && (
+              <div className="chips" role="group" aria-labelledby="tune-events" style={{ marginBottom: 10 }}>
+                {info.events.map((e) => (
+                  <Chip key={e.value} checked={events.includes(e.value)} onChange={(on) => setEvents(on ? [...events, e.value] : events.filter((x) => x !== e.value))}>
+                    {e.label}
+                  </Chip>
+                ))}
+              </div>
+            )}
+            <Field label={info.events.length ? "Other event names" : "Event names"} hint="Comma-separated, exactly as the app sends them.">
+              <input type="text" className="mono" value={others.join(", ")} onChange={(e) => setEvents([...events.filter((x) => known.has(x)), ...splitList(e.target.value)])} />
+            </Field>
+          </>
+        ) : (
+          <p className="tune-hint">Every request. To route by event name, the app needs an event field (set when it was connected); conditions below work either way.</p>
+        )}
+      </div>
+      <div className="tune-group">
+        <h4 className="tune-title">Conditions</h4>
+        <p className="tune-hint">All must pass. Pick a field, or choose "Other field…" and type its path in the request, e.g. data.object.status.</p>
+        <ConditionsEditor conditions={p.conditions} onChange={p.setConditions} fields={info.fields} lists={p.lists} />
+      </div>
     </div>
   );
 }

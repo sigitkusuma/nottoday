@@ -20,7 +20,7 @@ import { LiveProvider } from "./useLive";
 /** Main sections, then the settings group. */
 const MAIN: [string, string, IconName][] = [
   ["overview", "Dashboard", "dashboard"],
-  ["apps", "Bots", "bot"],
+  ["apps", "Apps", "bot"],
   ["live", "Activity", "activity"],
   ["lists", "Lists", "list"],
 ];
@@ -115,7 +115,7 @@ function Sidebar({ status, tab, goTo }: { status: Status; tab: Tab; goTo: GoTo }
       <Icon name={icon} />
       {label}
       {id === "apps" && bots.length > 0 && (
-        <span className={`nav-badge${attention ? "" : " ok"}`} aria-label={attention ? `${attention} of ${bots.length} bots need attention` : `${bots.length} bots`}>
+        <span className={`nav-badge${attention ? "" : " ok"}`} aria-label={attention ? `${attention} of ${bots.length} apps need attention` : `${bots.length} apps`}>
           {attention || bots.length}
         </span>
       )}

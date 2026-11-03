@@ -1,5 +1,5 @@
 /**
- * Activity: every request Slack sends to the gateway and what happened to it,
+ * Activity: every request your apps send to the gateway and what happened to it,
  * as it happens. Real time comes from a Cloudflare tail session; if that isn't
  * available, the page falls back to stats, which lag a minute or two.
  */
@@ -15,7 +15,7 @@ import { describe } from "./LiveCheck";
 import { Empty, PageHead, PulseLegend, StatusPill } from "./parts";
 import { ErrorNotice, timeAgo, useAction } from "./ui";
 
-const SHORT: Record<PulseTone, string> = { sent: "Sent to n8n", saved: "Dropped", shadow: "Shadow", bad: "Rejected", info: "Slack check" };
+const SHORT: Record<PulseTone, string> = { sent: "Sent to n8n", saved: "Dropped", shadow: "Shadow", bad: "Rejected", info: "URL check" };
 
 type Filter = "all" | PulseTone;
 const FILTERS: [Filter, string][] = [
@@ -49,7 +49,7 @@ export function Live() {
     <div className="page">
       <PageHead
         title="Activity"
-        sub="Every request Slack sends to the gateway and what happened to it. Message text is never shown or recorded."
+        sub="Every request your apps send to the gateway and what happened to it. Message text is never shown or recorded."
         actions={
           <StatusPill
             tone={live.state === "live" ? "ok" : live.state === "connecting" ? "idle" : "warn"}
@@ -67,8 +67,8 @@ export function Live() {
       ) : (
         <>
           <div className="feed-bar">
-            <select aria-label="Show one bot" value={bot} onChange={(e) => setBot(e.target.value)}>
-              <option value="">All bots</option>
+            <select aria-label="Show one app" value={bot} onChange={(e) => setBot(e.target.value)}>
+              <option value="">All apps</option>
               {Object.keys(config?.apps ?? {}).map((k) => (
                 <option key={k}>{k}</option>
               ))}
@@ -87,8 +87,8 @@ export function Live() {
           </div>
 
           {rows.length === 0 ? (
-            <Empty title={source.length === 0 ? (live.state === "connecting" ? "Connecting to the gateway…" : "Waiting for the next Slack request") : "Nothing matches this filter"}>
-              {source.length === 0 ? "Post a message in a channel one of your bots is in. It shows up here within a second or two." : "Change the bot or the filter above to see more."}
+            <Empty title={source.length === 0 ? (live.state === "connecting" ? "Connecting to the gateway…" : "Waiting for the next request") : "Nothing matches this filter"}>
+              {source.length === 0 ? "Send something from a connected app, e.g. a Slack message or a GitHub push. It shows up here within a second or two." : "Change the app or the filter above to see more."}
             </Empty>
           ) : (
             <div className="feed" aria-live={paused ? "off" : "polite"}>
@@ -128,7 +128,7 @@ function FromStats() {
   return (
     <>
       <ErrorNotice error={action.error} />
-      {rows && rows.length === 0 && <Empty title="Nothing in the last 24 hours">Is the Slack app's Request URL pointing at the gateway?</Empty>}
+      {rows && rows.length === 0 && <Empty title="Nothing in the last 24 hours">Is the app's webhook URL pointing at the gateway?</Empty>}
       {rows && rows.length > 0 && (
         <div className="feed">
           {rows.map((r, i) => (

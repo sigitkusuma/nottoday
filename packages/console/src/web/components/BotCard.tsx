@@ -1,20 +1,27 @@
-/** One bot at a glance: name, status, last activity, counts, routes and a pulse of recent events. */
+/** One app at a glance: name, kind, status, last activity, counts, routes and a pulse of recent events. */
 
 import type { Bot } from "../bots";
 import { useLive } from "../useLive";
 import { fmt, timeAgo } from "./ui";
+import { sourceOf } from "@gw/shared";
+import { sourceInfo } from "../sources";
+import { Icon } from "./icons";
 import { Avatar, PulseStrip, StatusPill } from "./parts";
 
 export function BotCard({ bot, showCounts, onOpen }: { bot: Bot; showCounts: boolean; onOpen: () => void }) {
   const live = useLive();
   const { status, totals, app } = bot;
+  const info = sourceInfo(sourceOf(app));
   return (
-    <button type="button" className={`bot-card tone-${status.tone}`} onClick={onOpen} aria-label={`${bot.key}: ${status.label}. Open`}>
+    <button type="button" className={`bot-card tone-${status.tone}`} onClick={onOpen} aria-label={`${bot.key}, ${info.label}: ${status.label}. Open`}>
       <span className="bot-top">
         <Avatar name={bot.key} />
         <span className="bot-title">
           <div className="bot-name">{bot.key}</div>
-          <StatusPill tone={status.tone} label={status.label} live={status.health === "receiving"} />
+          <span className="bot-tags">
+            <StatusPill tone={status.tone} label={status.label} live={status.health === "receiving"} />
+            <SourceTag source={app.source} />
+          </span>
         </span>
       </span>
 
@@ -62,8 +69,19 @@ export function AddBotCard({ onClick }: { onClick: () => void }) {
       <span className="plus" aria-hidden="true">
         +
       </span>
-      <strong>Connect a Slack app</strong>
-      <span className="small">Takes about five minutes and checks each step for you.</span>
+      <strong>Connect an app</strong>
+      <span className="small">Slack, GitHub, Telegram or any webhook. The console checks each step for you.</span>
     </button>
+  );
+}
+
+/** Which kind of app this is: an icon and its name. */
+export function SourceTag({ source }: { source?: Parameters<typeof sourceOf>[0]["source"] }) {
+  const info = sourceInfo(source);
+  return (
+    <span className="source-tag">
+      <Icon name={info.icon} size={13} />
+      {info.label}
+    </span>
   );
 }

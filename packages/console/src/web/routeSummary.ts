@@ -3,7 +3,8 @@
  * meant before saving it. Pure: also used by the tests.
  */
 
-import type { EventFilters, ListRef, Route } from "@gw/shared";
+import type { Condition, EventFilters, ListRef, Route, SourceType } from "@gw/shared";
+import { fieldLabel, sourceInfo } from "./sources";
 
 const SUBTYPE_NAMES: Record<string, string> = {
   "": "new messages",
@@ -21,7 +22,7 @@ const CHANNEL_TYPE_NAMES: Record<string, string> = {
   mpim: "group DMs",
 };
 
-/** Why a message was dropped, in words. Keys are the router's filter names. */
+/** Why a message was dropped, in words. Keys are the router's filter names; see reasonText() for conditions. */
 export const REASON_TEXT: Record<string, string> = {
   subtypes: "it's a kind of message this route doesn't keep (for example an edit or a delete)",
   ignoreBots: "it was posted by a bot",
@@ -35,7 +36,51 @@ export const REASON_TEXT: Record<string, string> = {
   textMatches: "the text doesn't match the pattern",
 };
 
-export function summarizeRoute(route: Route): string[] {
+export function summarizeRoute(route: Route, source: SourceType = "slack"): string[] {
+  if (source !== "slack") return summarizeSourceRoute(route, source);
+  const sentences = summarizeSlackRoute(route);
+  if (route.match?.length) sentences.splice(1, 0, `Only when ${describeMatch(route.match, source)}.`);
+  return sentences;
+}
+
+function summarizeSourceRoute(route: Route, source: SourceType): string[] {
+  const info = sourceInfo(source);
+  const events = route.on.type === "event" ? route.on.events : [];
+  const any = events.length === 0 || events.includes("*");
+  const what = any
+    ? `every ${info.noun}`
+    : joinWords(events.map((e) => (info.events.find((x) => x.value === e)?.label.toLowerCase() ?? `${e} ${info.noun}s`)), "or");
+  const conditions = route.match?.filter((c) => c.field.trim()) ?? [];
+  const reply = route.respond === "proxy" ? ", and returns n8n's reply" : "";
+  const sentences = [`Forwards ${what}${conditions.length ? ` where ${describeMatch(conditions, source)}` : ""}${reply}.`];
+  if (!any) sentences.push(`Other ${info.noun}s are dropped.`);
+  if (any && conditions.length === 0) sentences.push(`No conditions: every verified ${info.noun} reaches n8n, so this route saves nothing yet.`);
+  return sentences;
+}
+
+const OP_TEXT: Record<Condition["op"], string> = {
+  is: "is",
+  isNot: "is not",
+  in: "is one of",
+  notIn: "is not one of",
+  matches: "matches",
+  exists: "is present",
+  missing: "is missing",
+};
+
+/** "Branch (pushes) is main and Sender type is not Bot" */
+export function describeMatch(conditions: Condition[], source: SourceType): string {
+  return joinWords(
+    conditions.map((c) => {
+      const label = fieldLabel(source, c.field);
+      if (c.op === "exists" || c.op === "missing") return `${label} ${OP_TEXT[c.op]}`;
+      const value = Array.isArray(c.value) ? joinWords(c.value, "or") : typeof c.value === "string" && c.value.startsWith("@") ? `the list ${c.value}` : `"${c.value ?? ""}"`;
+      return `${label} ${OP_TEXT[c.op]} ${value}`;
+    }),
+  );
+}
+
+function summarizeSlackRoute(route: Route): string[] {
   const on = route.on;
   if (on.type === "command") {
     const cmds = on.commands.length ? on.commands.join(", ") : "(no command set yet)";
@@ -109,4 +154,11 @@ function listText(ref: ListRef, noun: string): string {
 function joinWords(items: string[], last = "and"): string {
   if (items.length <= 1) return items.join("");
   return `${items.slice(0, -1).join(", ")} ${last} ${items.at(-1)}`;
+}
+
+/** REASON_TEXT, plus "match:<field>" from a condition. */
+export function reasonText(reason: string | undefined, source: SourceType = "slack"): string {
+  if (!reason) return "";
+  if (reason.startsWith("match:")) return `${fieldLabel(source, reason.slice(6))} didn't match the route's condition`;
+  return REASON_TEXT[reason] ?? reason;
 }
