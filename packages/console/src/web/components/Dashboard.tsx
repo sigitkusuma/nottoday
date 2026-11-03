@@ -151,7 +151,7 @@ export function Dashboard({ status, onStatusChange, goTo }: { status: Status; on
         <Empty title={live.state === "unavailable" ? "Live activity isn't available" : "Waiting for the next request"}>
           {live.state === "unavailable"
             ? `${live.message ?? ""} The Activity page falls back to stats, which lag a minute or two.`
-            : "Send something from a connected app, e.g. a Slack message or a GitHub push. It appears here within a second or two."}
+            : "Send something from a connected app, e.g. a Slack message. It appears here within a second or two."}
         </Empty>
       ) : (
         <div className="feed">

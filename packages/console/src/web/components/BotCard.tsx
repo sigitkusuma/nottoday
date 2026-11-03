@@ -70,7 +70,7 @@ export function AddBotCard({ onClick }: { onClick: () => void }) {
         +
       </span>
       <strong>Connect an app</strong>
-      <span className="small">Slack, GitHub, Telegram or any webhook. The console checks each step for you.</span>
+      <span className="small">Takes about five minutes and checks each step for you.</span>
     </button>
   );
 }

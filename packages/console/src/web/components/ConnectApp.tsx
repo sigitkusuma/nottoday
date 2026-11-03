@@ -33,19 +33,24 @@ export function ConnectApp(props: Props) {
         {(Object.keys(SOURCES) as SourceType[]).map((id) => {
           const s = SOURCES[id];
           return (
-            <button key={id} type="button" className="tile" onClick={() => setSource(id)}>
+            <button key={id} type="button" className="tile" disabled={!s.available} onClick={() => setSource(id)}>
               <span className="tile-icon" aria-hidden="true">
                 <Icon name={s.icon} />
               </span>
-              <strong>{s.label}</strong>
+              <strong>
+                {s.label}
+                {!s.available && <span className="badge">coming soon</span>}
+              </strong>
               <span className="small">{s.tagline}</span>
             </button>
           );
         })}
       </div>
-      <p className="hint">
-        For GitHub, Telegram and webhooks, the n8n workflow starts with a plain <b>Webhook</b> node. n8n's own GitHub and Telegram triggers register their webhook themselves, which would go around the gateway.
-      </p>
+      {Object.values(SOURCES).some((s) => s.available && s.id !== "slack") && (
+        <p className="hint">
+          For GitHub, Telegram and webhooks, the n8n workflow starts with a plain <b>Webhook</b> node. n8n's own GitHub and Telegram triggers register their webhook themselves, which would go around the gateway.
+        </p>
+      )}
     </>
   );
 }

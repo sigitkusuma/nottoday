@@ -88,7 +88,7 @@ export function Live() {
 
           {rows.length === 0 ? (
             <Empty title={source.length === 0 ? (live.state === "connecting" ? "Connecting to the gateway…" : "Waiting for the next request") : "Nothing matches this filter"}>
-              {source.length === 0 ? "Send something from a connected app, e.g. a Slack message or a GitHub push. It shows up here within a second or two." : "Change the app or the filter above to see more."}
+              {source.length === 0 ? "Send something from a connected app, e.g. a Slack message. It shows up here within a second or two." : "Change the app or the filter above to see more."}
             </Empty>
           ) : (
             <div className="feed" aria-live={paused ? "off" : "polite"}>

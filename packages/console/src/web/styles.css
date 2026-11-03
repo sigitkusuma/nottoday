@@ -535,7 +535,8 @@ button.rail-btn:hover .rail-title { text-decoration: underline; }
 @media (max-width: 520px) { .hstepper { flex-wrap: wrap; gap: 10px 16px; } .hstepper li { flex: 0 0 auto; white-space: normal; } .hstepper li:not(:last-child)::after { display: none; } }
 .wizard-foot.end { justify-content: flex-end; }
 button.tile { font: inherit; color: inherit; text-align: left; width: 100%; }
-button.tile:disabled { opacity: 0.5; cursor: not-allowed; }
+button.tile:disabled { opacity: 0.55; cursor: not-allowed; }
+button.tile:disabled:hover { border-color: var(--border); }
 .token-guide { margin-bottom: 18px; }
 .howto li > span { min-width: 0; }
 .token-note { display: block; margin-top: 6px; }

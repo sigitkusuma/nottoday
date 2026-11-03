@@ -180,7 +180,7 @@ export function Apps({
             </button>
           }
         >
-          Connect the app whose events start your n8n workflow: Slack, GitHub, Telegram or any webhook. The console confirms each step as it happens.
+          Connect the app whose events start your n8n workflow. The console confirms each step as it happens.
         </Empty>
       ) : (
         <>

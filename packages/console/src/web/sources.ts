@@ -30,6 +30,8 @@ export interface SourceInfo {
   icon: IconName;
   /** One line for the "Connect an app" tile. */
   tagline: string;
+  /** False: shown in "Connect an app" as coming soon, and can't be picked. Apps already connected keep working. */
+  available: boolean;
   /** What one incoming request is called. */
   noun: string;
   /** Who sends the requests, for sentences: "Waiting for GitHub", "the service's requests fail…". */
@@ -48,6 +50,7 @@ export const SOURCES: Record<SourceType, SourceInfo> = {
     label: "Slack",
     icon: "hash",
     tagline: "Messages, mentions, slash commands and buttons from a Slack app.",
+    available: true,
     noun: "event",
     sender: "Slack",
     events: [],
@@ -59,6 +62,7 @@ export const SOURCES: Record<SourceType, SourceInfo> = {
     label: "GitHub",
     icon: "branch",
     tagline: "Pushes, pull requests, issues, releases and workflow runs from a repository or organization.",
+    available: false,
     noun: "event",
     sender: "GitHub",
     events: [
@@ -147,6 +151,7 @@ export const SOURCES: Record<SourceType, SourceInfo> = {
     label: "Telegram",
     icon: "send",
     tagline: "Messages, commands and button presses sent to a Telegram bot.",
+    available: false,
     noun: "update",
     sender: "Telegram",
     events: [
@@ -209,6 +214,7 @@ export const SOURCES: Record<SourceType, SourceInfo> = {
     label: "Any webhook",
     icon: "link",
     tagline: "Shopify, Linear, Typeform, GitLab, or your own service: anything that sends a signed request.",
+    available: false,
     noun: "request",
     sender: "the service",
     events: [],

@@ -111,7 +111,7 @@ export function SetupChecklist({
         ? `Receiving events from ${liveSignals.filter((s) => s.lastRequest && s.lastRequest !== s.lastVerified).map((s) => s.app).join(", ")}.`
         : apps.length
           ? "Added, but nothing has arrived yet. Open the app to run the live check."
-          : "Connect the app whose events start your n8n workflow: Slack, GitHub, Telegram or any webhook.",
+          : "Connect the app whose events start your n8n workflow.",
       action: { label: apps.length ? "Open Apps" : "Connect an app", onClick: () => goTo(apps.length ? "apps" : "apps/new") },
     },
     {
