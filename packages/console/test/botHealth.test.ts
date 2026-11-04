@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { botStatus, botTotals, pulse } from "../src/web/botHealth";
+import { botStatus, botTotals, decisionTone, eventTone, pulse } from "../src/web/botHealth";
 import type { AppConfig, RouteSummary } from "../src/web/types";
 import type { LiveEvent } from "../src/web/useLive";
 
@@ -57,10 +57,10 @@ describe("botStatus", () => {
 describe("pulse", () => {
   it("shows one dot per event for this bot, newest first, capped", () => {
     const live = [
-      ev({ routes: [{ route: "r0", mode: "enforce", filter: "pass", forwarded: true }] }),
+      ev({ routes: [{ route: "r0", mode: "enforce", filter: "pass", forwarded: true, status: 200 }] }),
       ev({ app: "other" }),
       ev({ routes: [{ route: "r0", mode: "enforce", filter: "fail", reason: "ignoreBots", forwarded: false }] }),
-      ev({ routes: [{ route: "r0", mode: "shadow", filter: "fail", reason: "ignoreBots", forwarded: true }] }),
+      ev({ routes: [{ route: "r0", mode: "shadow", filter: "fail", reason: "ignoreBots", forwarded: true, status: 200 }] }),
       ev({ kind: "bad_signature" }),
     ];
     expect(pulse(live, "support").map((p) => p.tone)).toEqual(["sent", "saved", "shadow", "bad"]);
@@ -73,5 +73,37 @@ describe("botTotals", () => {
     const rows = [summary({ route: "a", received: 10, forwarded: 4, dropped: 6 }), summary({ route: "b", received: 5, forwarded: 5, wouldDrop: 2 }), summary({ app: "other", received: 99 })];
     const t = botTotals(rows, "support", (r) => (r === "b" ? "shadow" : "enforce"));
     expect(t).toEqual({ received: 15, forwarded: 9, saved: 6, wouldSave: 2 });
+  });
+});
+
+describe("eventTone: each outcome has its own tone, so the activity list can be read at a glance", () => {
+  const route = (over: object) => ({ route: "r0", mode: "enforce", filter: "pass", forwarded: true, status: 200, ...over });
+  const tone = (over: Partial<LiveEvent>) => eventTone(ev(over)).tone;
+
+  it("tells apart sent, dropped by a filter, shadow, not routed, n8n error and rejected", () => {
+    expect(tone({ routes: [route({})] })).toBe("sent");
+    expect(tone({ routes: [route({ forwarded: false, status: undefined, filter: "fail", reason: "ignoreBots" })] })).toBe("saved");
+    expect(tone({ routes: [route({ mode: "shadow", filter: "fail", reason: "ignoreBots" })] })).toBe("shadow");
+    expect(tone({ routes: [] })).toBe("unrouted");
+    expect(tone({ routes: undefined })).toBe("unrouted");
+    expect(tone({ routes: [route({ status: 404 })] })).toBe("error");
+    expect(tone({ routes: [route({ status: undefined })] })).toBe("error");
+    expect(tone({ kind: "bad_signature" })).toBe("bad");
+    expect(tone({ kind: "verified" })).toBe("info");
+  });
+
+  it("an n8n error outranks the rest, and one failing route is enough", () => {
+    expect(tone({ routes: [route({}), route({ route: "r1", status: 500 })] })).toBe("error");
+  });
+
+  it("stats rows get the same tones", () => {
+    const d = (over: object) => decisionTone({ outcome: "forwarded", mode: "enforce", filter: "pass", status: 200, ...over }).tone;
+    expect(d({})).toBe("sent");
+    expect(d({ outcome: "dropped", status: 0 })).toBe("saved");
+    expect(d({ outcome: "unrouted", status: 0 })).toBe("unrouted");
+    expect(d({ mode: "shadow", filter: "fail" })).toBe("shadow");
+    expect(d({ status: 502 })).toBe("error");
+    expect(d({ outcome: "bad_signature", status: 0 })).toBe("bad");
+    expect(d({ outcome: "url_verification", status: 0 })).toBe("info");
   });
 });

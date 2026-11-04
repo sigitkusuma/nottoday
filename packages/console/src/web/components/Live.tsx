@@ -6,7 +6,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
-import { eventTone, type PulseTone } from "../botHealth";
+import { decisionTone, eventTone, type PulseTone } from "../botHealth";
 import { useConfig } from "../config";
 import type { RecentDecision } from "../types";
 import { useLive, type LiveEvent } from "../useLive";
@@ -15,7 +15,7 @@ import { describe } from "./LiveCheck";
 import { Empty, PageHead, PulseLegend, StatusPill } from "./parts";
 import { ErrorNotice, timeAgo, useAction } from "./ui";
 
-const SHORT: Record<PulseTone, string> = { sent: "Sent to n8n", saved: "Dropped", shadow: "Shadow", bad: "Rejected", info: "URL check" };
+const SHORT: Record<PulseTone, string> = { sent: "Sent to n8n", saved: "Dropped", shadow: "Shadow", unrouted: "Not routed", error: "n8n error", bad: "Rejected", info: "URL check" };
 
 type Filter = "all" | PulseTone;
 const FILTERS: [Filter, string][] = [
@@ -23,6 +23,8 @@ const FILTERS: [Filter, string][] = [
   ["sent", "Sent to n8n"],
   ["saved", "Dropped"],
   ["shadow", "Shadow"],
+  ["unrouted", "Not routed"],
+  ["error", "n8n error"],
   ["bad", "Rejected"],
 ];
 
@@ -102,7 +104,9 @@ export function Live() {
                       {describe(e)}
                       {e.channel && <small className="mono">{e.channel}</small>}
                     </span>
-                    <span className={`pill ${t.tone === "bad" ? "bad" : t.tone === "shadow" ? "warn" : t.tone === "info" ? "" : "ok"}`}>{SHORT[t.tone]}</span>
+                    <span className={`pill ${t.tone}`} title={t.title}>
+                      {SHORT[t.tone]}
+                    </span>
                   </div>
                 );
               })}
@@ -131,19 +135,32 @@ function FromStats() {
       {rows && rows.length === 0 && <Empty title="Nothing in the last 24 hours">Is the app's webhook URL pointing at the gateway?</Empty>}
       {rows && rows.length > 0 && (
         <div className="feed">
-          {rows.map((r, i) => (
+          {rows.map((r, i) => {
+            const t = decisionTone(r);
+            return (
             <div className="feed-row" key={`${r.time}-${i}`}>
               <span className="t">{timeAgo(r.time)}</span>
               <span className="who">{r.app}</span>
               <span className="what">
-                {r.outcome === "dropped" ? `Dropped (${r.reason})` : r.mode === "shadow" && r.filter === "fail" ? `Forwarded, would drop (${r.reason})` : r.outcome}
+                {r.outcome === "dropped"
+                  ? `Dropped (${r.reason})`
+                  : r.outcome === "unrouted"
+                    ? "No route lists this event"
+                    : r.mode === "shadow" && r.filter === "fail"
+                      ? `Forwarded, would drop (${r.reason})`
+                      : r.outcome === "forwarded" && r.status
+                        ? `Forwarded (n8n ${r.status})`
+                        : r.outcome}
                 <small>
                   {[r.route, [r.kind, r.type].filter(Boolean).join(": ")].filter(Boolean).join(" · ")}
                 </small>
               </span>
-              <span className="small faint">{r.status ? `n8n ${r.status}` : ""}</span>
+              <span className={`pill ${t.tone}`} title={t.title}>
+                {SHORT[t.tone]}
+              </span>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </>

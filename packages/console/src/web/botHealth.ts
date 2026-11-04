@@ -105,7 +105,9 @@ export function errorDetail(failing: RouteSummary[]): string {
   return `The workflow URL for ${names} answered ${list}. ${hint}`.trim();
 }
 
-export type PulseTone = "sent" | "saved" | "shadow" | "bad" | "info";
+/** sent: reached n8n · saved: a filter dropped it · shadow: reached n8n but a filter would drop it · unrouted: no route lists this event
+ *  · error: n8n didn't accept it · bad: the gateway refused it · info: Slack's URL check. */
+export type PulseTone = "sent" | "saved" | "shadow" | "unrouted" | "error" | "bad" | "info";
 
 /** One dot per recent event, newest first, for the little pulse strip on a bot card. */
 export function pulse(live: LiveEvent[], key: string, max = 14): { tone: PulseTone; title: string }[] {
@@ -118,14 +120,38 @@ export function pulse(live: LiveEvent[], key: string, max = 14): { tone: PulseTo
   return out;
 }
 
+/** The engine counts a forward as failed unless n8n answered with a status below 400. */
+const failedForward = (r: { forwarded: boolean; status?: number }) => r.forwarded && !(r.status && r.status < 400);
+
 export function eventTone(e: LiveEvent): { tone: PulseTone; title: string } {
   if (e.kind === "bad_signature" || e.kind === "missing_secret" || e.kind === "unknown_app" || e.kind === "error") return { tone: "bad", title: "Rejected" };
   if (e.kind === "verified") return { tone: "info", title: "Slack verified the URL" };
   const routes = e.routes ?? [];
-  if (routes.length === 0) return { tone: "saved", title: "No route: dropped" };
+  if (routes.length === 0) return { tone: "unrouted", title: "No route lists this event: dropped" };
+  if (routes.some(failedForward)) return { tone: "error", title: "Forwarded, but n8n didn't accept it" };
   if (routes.some((r) => r.forwarded && r.filter === "fail")) return { tone: "shadow", title: "Forwarded (shadow: would drop)" };
   if (routes.some((r) => r.forwarded)) return { tone: "sent", title: "Sent to n8n" };
   return { tone: "saved", title: "Dropped: execution saved" };
+}
+
+/** The same classes for a row from the stats table, used when the live feed isn't available. */
+export function decisionTone(d: { outcome: string; mode: string; filter: string; status: number }): { tone: PulseTone; title: string } {
+  switch (d.outcome) {
+    case "bad_signature":
+      return { tone: "bad", title: "Rejected" };
+    case "url_verification":
+      return { tone: "info", title: "Slack verified the URL" };
+    case "unrouted":
+      return { tone: "unrouted", title: "No route lists this event: dropped" };
+    case "dropped":
+      return { tone: "saved", title: "Dropped: execution saved" };
+    case "forwarded":
+      if (failedForward({ forwarded: true, status: d.status })) return { tone: "error", title: "Forwarded, but n8n didn't accept it" };
+      if (d.mode === "shadow" && d.filter === "fail") return { tone: "shadow", title: "Forwarded (shadow: would drop)" };
+      return { tone: "sent", title: "Sent to n8n" };
+    default:
+      return { tone: "info", title: d.outcome };
+  }
 }
 
 export interface BotTotals {

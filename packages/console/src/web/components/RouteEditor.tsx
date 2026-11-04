@@ -8,6 +8,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { api } from "../api";
 import type { ListField } from "../listPicker";
+import { eventNames, unforwardedEvents } from "../eventCoverage";
 import { summarizeRoute } from "../routeSummary";
 import { sourceInfo } from "../sources";
 import { sourceOf, type Condition, type SourceType } from "@gw/shared";
@@ -105,6 +106,14 @@ export function RouteEditor({
   const lists = Object.keys(config.lists);
   // A Slack Trigger node only understands Slack's requests.
   const usableTriggers = (triggers ?? []).filter((t) => isSlack || t.kind === "webhook");
+  // Event types the chosen workflow's Slack Trigger listens to but this route doesn't forward: they'd never arrive.
+  const chosenTrigger = usableTriggers.find((t) => t.url === r.forwardTo);
+  const missingEvents = isSlack && r.on.type === "event" ? unforwardedEvents(chosenTrigger?.suggestedEvents, splitList(eventsText)) : [];
+  const addEvents = (extra: string[]) => {
+    const next = [...splitList(eventsText).filter((e) => e !== "*"), ...extra];
+    setEventsText(next.join(", "));
+    setR((prev) => (prev.on.type === "event" ? { ...prev, on: { type: "event", events: next } } : prev));
+  };
 
   const applyTemplate = (id: string) => {
     setTemplateId(id);
@@ -257,6 +266,16 @@ export function RouteEditor({
                     </select>
                   </Field>
                 )}
+                {missingEvents.length > 0 && (
+                  <div className="notice warn small event-gap" role="status">
+                    <span>
+                      This workflow's Slack Trigger also listens for <b>{eventNames(missingEvents)}</b>, which this route doesn't forward. Those requests never reach the workflow, even in shadow mode. If the workflow acts on them, add them; if it ignores them, leave the route as it is.
+                    </span>
+                    <button type="button" className="btn sm" onClick={() => addEvents(missingEvents)}>
+                      Add {eventNames(missingEvents)}
+                    </button>
+                  </div>
+                )}
                 <Field
                   label="n8n production URL"
                   hint={
@@ -320,7 +339,7 @@ export function RouteEditor({
                 </details>
               </Block>
 
-              <Block n={n + 3} id="step-mode" title="Start in" hint="Shadow lets you watch what a route would drop before it drops anything.">
+              <Block n={n + 3} id="step-mode" title="Start in" hint="Shadow lets you watch what a route's filters would drop before they drop anything. Event types the route doesn't list are dropped either way.">
                 <div className="tiles two" role="radiogroup" aria-labelledby="step-mode">
                   <label className={`tile${(r.mode ?? "enforce") === "shadow" ? " selected" : ""}`}>
                     <input type="radio" name="mode" checked={(r.mode ?? "enforce") === "shadow"} onChange={() => setR({ ...r, mode: "shadow" })} />
@@ -379,7 +398,7 @@ export function RouteEditor({
           <ErrorNotice error={action.error} />
           <div className="action-bar">
             <span className="note">
-              {r.enabled === false ? "Saved but turned off." : (r.mode ?? "enforce") === "shadow" ? "Shadow mode: nothing is dropped yet." : "Enforce mode: rejected requests are dropped."} Live within a minute of saving.
+              {r.enabled === false ? "Saved but turned off." : (r.mode ?? "enforce") === "shadow" ? "Shadow mode: the filters don't drop yet." : "Enforce mode: rejected requests are dropped."} Live within a minute of saving.
             </span>
             <span className="row">
               <button type="button" className="btn" onClick={onCancel}>
@@ -458,9 +477,14 @@ function FineTune(p: {
         </div>
         <div style={{ marginTop: 12 }}>
           {r.on.type === "event" && (
-            <Field label="Event types" hint='Slack event types, comma-separated, e.g. "message, app_mention". "*" means any.'>
-              <input type="text" value={p.eventsText} onChange={(e) => p.setEventsText(e.target.value)} />
-            </Field>
+            <EventPicker
+              source="slack"
+              eventsText={p.eventsText}
+              setEventsText={p.setEventsText}
+              labelId="tune-event-types"
+              title="Event types"
+              hint="Tick what the workflow acts on. A message that @mentions the app arrives as two events, a message and an app_mention, so tick only the one the workflow uses. None ticked means every event."
+            />
           )}
           {r.on.type === "command" && (
             <Field label="Commands" hint="e.g. /ask. Turn on “wait for n8n's reply” under Start in if the workflow answers the command directly.">
@@ -546,6 +570,37 @@ function FineTune(p: {
   );
 }
 
+/** Event names as ticks for the common ones of this kind of app, plus a field for any other. None ticked means every event. */
+function EventPicker(p: { source: SourceType; eventsText: string; setEventsText: (s: string) => void; labelId: string; title?: string; hint?: string }) {
+  const info = sourceInfo(p.source);
+  const events = splitList(p.eventsText).filter((e) => e !== "*");
+  const known = new Set(info.events.map((e) => e.value));
+  const others = events.filter((e) => !known.has(e));
+  const setEvents = (next: string[]) => p.setEventsText(next.length ? next.join(", ") : "*");
+  return (
+    <>
+      {p.title && (
+        <div className="tune-sub" id={p.labelId}>
+          {p.title}
+        </div>
+      )}
+      <p className="tune-hint">{p.hint ?? `None selected means every ${info.noun}.`}</p>
+      {info.events.length > 0 && (
+        <div className="chips" role="group" aria-labelledby={p.labelId} style={{ marginBottom: 10 }}>
+          {info.events.map((e) => (
+            <Chip key={e.value} checked={events.includes(e.value)} onChange={(on) => setEvents(on ? [...events, e.value] : events.filter((x) => x !== e.value))}>
+              {e.label}
+            </Chip>
+          ))}
+        </div>
+      )}
+      <Field label={info.events.length ? "Other event names" : "Event names"} hint={`Comma-separated, exactly as ${info.sender === "the service" ? "the app" : info.sender} sends them.`}>
+        <input type="text" className="mono" value={others.join(", ")} onChange={(e) => setEvents([...events.filter((x) => known.has(x)), ...splitList(e.target.value)])} />
+      </Field>
+    </>
+  );
+}
+
 function SourceFilters(p: {
   source: SourceType;
   eventsText: string;
@@ -556,10 +611,6 @@ function SourceFilters(p: {
   hasEventField: boolean;
 }) {
   const info = sourceInfo(p.source);
-  const events = splitList(p.eventsText).filter((e) => e !== "*");
-  const known = new Set(info.events.map((e) => e.value));
-  const others = events.filter((e) => !known.has(e));
-  const setEvents = (next: string[]) => p.setEventsText(next.length ? next.join(", ") : "*");
   return (
     <div className="tune">
       <div className="tune-group">
@@ -567,21 +618,7 @@ function SourceFilters(p: {
           Which {info.noun}s
         </h4>
         {p.hasEventField ? (
-          <>
-            <p className="tune-hint">None selected means every {info.noun}.</p>
-            {info.events.length > 0 && (
-              <div className="chips" role="group" aria-labelledby="tune-events" style={{ marginBottom: 10 }}>
-                {info.events.map((e) => (
-                  <Chip key={e.value} checked={events.includes(e.value)} onChange={(on) => setEvents(on ? [...events, e.value] : events.filter((x) => x !== e.value))}>
-                    {e.label}
-                  </Chip>
-                ))}
-              </div>
-            )}
-            <Field label={info.events.length ? "Other event names" : "Event names"} hint="Comma-separated, exactly as the app sends them.">
-              <input type="text" className="mono" value={others.join(", ")} onChange={(e) => setEvents([...events.filter((x) => known.has(x)), ...splitList(e.target.value)])} />
-            </Field>
-          </>
+          <EventPicker source={p.source} eventsText={p.eventsText} setEventsText={p.setEventsText} labelId="tune-events" />
         ) : (
           <p className="tune-hint">Every request. To route by event name, the app needs an event field (set when it was connected); conditions below work either way.</p>
         )}

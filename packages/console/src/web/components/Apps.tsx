@@ -329,7 +329,7 @@ function BotDetail({
                   <article key={r.name} className={`route-card${off ? " off" : ""}`}>
                     <div className="route-card-head">
                       <strong>{r.name}</strong>
-                      <span className={`badge ${off ? "off" : r.mode === "shadow" ? "shadow" : "enforce"}`}>{off ? "off" : r.mode === "shadow" ? "shadow: forwards everything" : "enforcing"}</span>
+                      <span className={`badge ${off ? "off" : r.mode === "shadow" ? "shadow" : "enforce"}`}>{off ? "off" : r.mode === "shadow" ? "shadow: filters don't drop yet" : "enforcing"}</span>
                     </div>
                     <p className="route-meta" style={{ marginBottom: 6 }}>
                       {summarizeRoute(r, source).join(" ")}

@@ -21,10 +21,18 @@ export function Avatar({ name, size }: { name: string; size?: number }) {
   );
 }
 
-const PULSE_TEXT: Record<PulseTone, string> = { sent: "Sent to n8n", saved: "Dropped (execution saved)", shadow: "Shadow: forwarded, would drop", bad: "Rejected", info: "Slack check" };
+const PULSE_TEXT: Record<PulseTone, string> = {
+  sent: "Sent to n8n",
+  saved: "Dropped by a filter (execution saved)",
+  shadow: "Shadow: forwarded, would drop",
+  unrouted: "No route lists it: dropped",
+  error: "n8n didn't accept it",
+  bad: "Rejected",
+  info: "Slack check",
+};
 
 export function PulseLegend() {
-  const tones: PulseTone[] = ["sent", "saved", "shadow", "bad"];
+  const tones: PulseTone[] = ["sent", "saved", "shadow", "unrouted", "error", "bad"];
   return (
     <div className="legend" aria-label="What the squares mean">
       {tones.map((t) => (

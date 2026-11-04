@@ -142,7 +142,7 @@ export function describe(e: LiveEvent): string {
     case "event": {
       const what = [e.type, e.subtype].filter(Boolean).join(" / ") || "event";
       const routes = e.routes ?? [];
-      if (routes.length === 0) return `${what}: no route for it yet.`;
+      if (routes.length === 0) return `${what}: no route lists this event, so it was dropped.`;
       return `${what}: ${routes
         .map((r) =>
           r.forwarded
