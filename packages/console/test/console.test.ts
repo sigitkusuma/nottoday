@@ -274,6 +274,46 @@ describe("n8n", () => {
   });
 });
 
+describe("reconnecting to a gateway that's already in the account", () => {
+  type Existing = { gateways: { scriptName: string; apps: number; routes: number; url?: string }[] };
+  const existing = async () => (await call<Existing>("GET", "/gateway/existing")).body.gateways;
+
+  it("finds nothing in a fresh account", async () => {
+    await call("POST", "/cloudflare/token", { token: "cf-token" });
+    expect(await existing()).toEqual([]);
+  });
+
+  it("a new machine finds the gateway, and installing again under its name keeps the apps and secrets", async () => {
+    await connectAndInstall();
+    await call("POST", "/apps", { key: "support", signingSecret: SECRET });
+    const config = storedConfig();
+    config.apps.support.routes = [{ name: "r", on: { type: "event", events: ["message"] }, forwardTo: "https://n8n.test/webhook/x", mode: "enforce" }];
+    cf.kv.get([...cf.kv.keys()][0])!.values.set(CONFIG_KEY, JSON.stringify(config));
+
+    // The machine is lost: its saved token and gateway link are gone. Cloudflare still has everything.
+    await call("DELETE", "/connections/" + (await call<{ connections: { id: string }[] }>("GET", "/connections")).body.connections[0].id);
+    await call("POST", "/cloudflare/token", { token: "cf-token" });
+    expect((await call<{ gateway: unknown }>("GET", "/status")).body.gateway).toBeNull();
+
+    expect(await existing()).toEqual([{ scriptName: "slack-gateway", apps: 1, routes: 1, url: "https://slack-gateway.acme.workers.dev" }]);
+
+    await call("POST", "/gateway/install", { scriptName: "slack-gateway" });
+    expect(cf.kv.size).toBe(1); // reused, not a second namespace
+    expect(Object.keys(storedConfig().apps)).toEqual(["support"]);
+    expect([...cf.scripts.get("slack-gateway")!.secrets.keys()]).toEqual(["SLACK_SIGNING_SECRET_SUPPORT"]);
+    const status = await call<{ gateway: { url: string } }>("GET", "/status");
+    expect(status.body.gateway.url).toBe("https://slack-gateway.acme.workers.dev");
+  });
+
+  it("ignores stores that aren't a gateway's: no Worker next to it, or no config in it", async () => {
+    await connectAndInstall();
+    cf.kv.set("ns-orphan", { title: "orphan-config", values: new Map([[CONFIG_KEY, JSON.stringify({ apps: {} })]]) }); // no Worker named "orphan"
+    cf.scripts.set("other", { metadata: {}, code: "", workersDev: true, secrets: new Map() });
+    cf.kv.set("ns-other", { title: "other-config", values: new Map([["something-else", "{}"]]) }); // a Worker, but not ours
+    expect((await existing()).map((g) => g.scriptName)).toEqual(["slack-gateway"]);
+  });
+});
+
 describe("saved Cloudflare accounts", () => {
   type Summary = { id: string; accountId: string | null; accountName: string | null; gatewayUrl: string | null; active: boolean; pending: boolean };
   const connections = async () => (await call<{ connections: Summary[] }>("GET", "/connections")).body.connections;

@@ -82,6 +82,43 @@ export async function installGateway(cf: CloudflareApi, accountId: string, scrip
   return install;
 }
 
+export interface ExistingGateway {
+  scriptName: string;
+  apps: number;
+  routes: number;
+  url?: string;
+}
+
+const KV_SUFFIX = "-config";
+
+/**
+ * Gateways already in this account, found by their settings store (a KV namespace named
+ * `<worker>-config` holding a config, next to a Worker of that name). Lets a new machine, or a
+ * console that lost its token, reconnect instead of making a second gateway.
+ */
+export async function findExistingGateways(cf: CloudflareApi, accountId: string): Promise<ExistingGateway[]> {
+  const [namespaces, scripts, subdomain] = await Promise.all([cf.listKvNamespaces(accountId), cf.listScriptNames(accountId), cf.workersSubdomain(accountId).catch(() => undefined)]);
+  const candidates = namespaces
+    .filter((n) => n.title.endsWith(KV_SUFFIX) && scripts.includes(n.title.slice(0, -KV_SUFFIX.length)))
+    .slice(0, 20);
+  const found = await Promise.all(
+    candidates.map(async (n): Promise<ExistingGateway | null> => {
+      const scriptName = n.title.slice(0, -KV_SUFFIX.length);
+      const raw = await cf.kvGet(accountId, n.id, CONFIG_KEY).catch(() => null);
+      if (raw === null) return null;
+      try {
+        const config = JSON.parse(raw) as { apps?: Record<string, { routes?: unknown[] }> };
+        if (!config.apps || typeof config.apps !== "object") return null;
+        const apps = Object.values(config.apps);
+        return { scriptName, apps: apps.length, routes: apps.reduce((n, a) => n + (a.routes?.length ?? 0), 0), url: subdomain ? `https://${scriptName}.${subdomain}.workers.dev` : undefined };
+      } catch {
+        return null;
+      }
+    }),
+  );
+  return found.filter((g): g is ExistingGateway => g !== null).sort((a, b) => a.scriptName.localeCompare(b.scriptName));
+}
+
 /**
  * Uploads the engine. Existing secrets are kept, so an upgrade never loses signing secrets.
  * Analytics Engine must be switched on once per Cloudflare account; until it is,

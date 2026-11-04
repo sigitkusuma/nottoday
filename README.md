@@ -128,6 +128,15 @@ Put the old n8n URL back in the Slack app's Event Subscriptions. The workflow wa
 
 The console listens on `127.0.0.1` only, unless you [run it on a server](#running-the-console-on-a-server). Every API call needs the session token from the link the CLI prints. See [SECURITY.md](SECURITY.md).
 
+## If your computer is lost or replaced
+
+The gateway keeps running on Cloudflare, so Slack and your other apps keep working. Your apps, routes, lists, version history and secrets are all in your Cloudflare account. Only your Cloudflare token and n8n key were on the old computer. To manage everything again from another one:
+
+1. Run `npx nottoday`.
+2. Create a new Cloudflare token and paste it in. If the old computer might be in someone else's hands, revoke the old token in Cloudflare (My Profile → API Tokens).
+3. On *Install the gateway*, the console lists the gateway that's already in the account. Click **Reconnect**. Nothing is deleted; the gateway is updated to the newest engine and your apps come back.
+4. Connect n8n again with its address and API key.
+
 ## Running the console on a server
 
 You don't need a server. The gateway runs on Cloudflare and keeps routing when the console is closed, so the usual way is to run `npx nottoday` on your laptop when you want to change something.

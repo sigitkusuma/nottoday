@@ -137,9 +137,37 @@ function ConnectCloudflare({ status, hasToken, onChange }: { status: Status; has
   );
 }
 
+interface ExistingGateway {
+  scriptName: string;
+  apps: number;
+  routes: number;
+  url?: string;
+}
+
+const count = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
+
 function Install({ status, onChange }: { status: Status; onChange: () => void }) {
   const [name, setName] = useState("nottoday");
   const action = useAction();
+  const [found, setFound] = useState<ExistingGateway[]>([]);
+  const [reconnecting, setReconnecting] = useState<string | null>(null);
+
+  // Gateways already in this account, e.g. from another computer or before the token was lost.
+  useEffect(() => {
+    let current = true;
+    api<{ gateways: ExistingGateway[] }>("GET", "/gateway/existing")
+      .then((r) => current && setFound(r.gateways))
+      .catch(() => undefined);
+    return () => {
+      current = false;
+    };
+  }, []);
+
+  const reconnect = (scriptName: string) => {
+    setReconnecting(scriptName);
+    void action.run(async () => (await api("POST", "/gateway/install", { scriptName }), onChange()));
+  };
+
   return (
     <form
       className="wizard-pane"
@@ -150,6 +178,33 @@ function Install({ status, onChange }: { status: Status; onChange: () => void })
       }}
     >
       <p className="muted small step-of">Step 2 of 2 · account {status.cloudflare?.accountName}</p>
+      {found.length > 0 && (
+        <section className="found" aria-labelledby="found-title">
+          <h3 id="found-title">{found.length === 1 ? "A gateway is already in this account" : "Gateways are already in this account"}</h3>
+          <p className="lead-sm">It looks like you installed {found.length === 1 ? "it" : "them"} before, maybe from another computer. Reconnect instead of making a new one, and your apps, routes, lists and secrets are all still there.</p>
+          <ul className="found-list">
+            {found.map((g) => (
+              <li key={g.scriptName} className="found-item">
+                <span className="found-main">
+                  <strong className="mono">{g.scriptName}</strong>
+                  <span className="small muted">
+                    {count(g.apps, "app")} · {count(g.routes, "route")}
+                    {g.url ? ` · ${g.url.replace("https://", "")}` : ""}
+                  </span>
+                </span>
+                <button type="button" className="btn primary" disabled={action.busy} onClick={() => reconnect(g.scriptName)}>
+                  {action.busy && reconnecting === g.scriptName ? "Reconnecting…" : "Reconnect"}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className="hint">Reconnecting updates the gateway to the newest engine. Nothing is deleted.</p>
+          <hr className="found-divider" />
+          <p className="lead-sm" style={{ marginBottom: 0 }}>
+            Or install a new gateway:
+          </p>
+        </section>
+      )}
       <h3 id="setup-title">Install the gateway</h3>
       <p className="lead-sm">This is what the install does in your Cloudflare account:</p>
       <ul className="todos plain">

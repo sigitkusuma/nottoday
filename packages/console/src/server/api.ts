@@ -5,7 +5,7 @@ import { streamSSE } from "hono/streaming";
 import { CONFIG_HISTORY_PREFIX, requestPath, sourceOf, type GatewayConfig, type SourceType, type WebhookVerify } from "@gw/shared";
 import { CloudflareApi, CloudflareError, createTokenUrl } from "./cloudflare";
 import { TelegramApi, TelegramError } from "./telegram";
-import { BUNDLED_ENGINE_VERSION, ConflictError, Gateway, InputError, InvalidConfigError, analyticsEngineUrl, installGateway, isAnalyticsEngineOff, loadEngineBundle } from "./gateway";
+import { BUNDLED_ENGINE_VERSION, ConflictError, Gateway, InputError, InvalidConfigError, analyticsEngineUrl, findExistingGateways, installGateway, isAnalyticsEngineOff, loadEngineBundle } from "./gateway";
 import { N8nApi, N8nError } from "./n8n";
 import { Stats } from "./stats";
 import { TailHub } from "./tail";
@@ -191,6 +191,14 @@ export function createApi(deps: ApiDeps = {}): Hono {
   });
 
   // Gateway install
+
+  /** Gateways already in the active account, so a new machine can reconnect to one instead of making another. */
+  api.get("/gateway/existing", async (c) => {
+    const { cf, accountId } = cloudflare(await loadState());
+    // A token that can't list them will fail the install with a clearer message, so this only offers help.
+    const gateways = await findExistingGateways(cf, accountId).catch(() => []);
+    return c.json({ gateways });
+  });
 
   api.post("/gateway/install", async (c) => {
     const { scriptName } = await c.req.json<{ scriptName?: string }>();

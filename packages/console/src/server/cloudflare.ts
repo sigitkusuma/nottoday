@@ -80,9 +80,13 @@ export class CloudflareApi {
     return subdomain;
   }
 
-  async scriptExists(accountId: string, name: string): Promise<boolean> {
+  async listScriptNames(accountId: string): Promise<string[]> {
     const scripts = await this.call<{ id: string }[]>("GET", `/accounts/${accountId}/workers/scripts`);
-    return scripts.some((s) => s.id === name);
+    return scripts.map((s) => s.id);
+  }
+
+  async scriptExists(accountId: string, name: string): Promise<boolean> {
+    return (await this.listScriptNames(accountId)).includes(name);
   }
 
   async uploadScript(accountId: string, name: string, upload: ScriptUpload): Promise<void> {
@@ -109,9 +113,12 @@ export class CloudflareApi {
     return secrets.map((s) => s.name);
   }
 
+  async listKvNamespaces(accountId: string): Promise<{ id: string; title: string }[]> {
+    return this.call<{ id: string; title: string }[]>("GET", `/accounts/${accountId}/storage/kv/namespaces?per_page=100`);
+  }
+
   async findKvNamespace(accountId: string, title: string): Promise<string | undefined> {
-    const namespaces = await this.call<{ id: string; title: string }[]>("GET", `/accounts/${accountId}/storage/kv/namespaces?per_page=100`);
-    return namespaces.find((n) => n.title === title)?.id;
+    return (await this.listKvNamespaces(accountId)).find((n) => n.title === title)?.id;
   }
 
   async createKvNamespace(accountId: string, title: string): Promise<string> {
