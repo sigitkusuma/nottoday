@@ -10,7 +10,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { api } from "../api";
 import type { ListField } from "../listPicker";
 import { eventNames, unforwardedEvents } from "../eventCoverage";
-import { summarizeRoute } from "../routeSummary";
+import { routeWarnings, summarizeRoute, type FilterGroupId, type RouteWarning } from "../routeSummary";
 import { sourceInfo } from "../sources";
 import { sourceOf, type Condition, type SourceType } from "@gw/shared";
 import type { EventFilters, GatewayConfig, ListRef, Route, Status, TriggerNode } from "../types";
@@ -44,8 +44,8 @@ const CHANNEL_TYPES: [string, string][] = [
 ];
 const LIST_FIELDS: [ListField, string, string][] = [
   ["mentionIn", "Must mention someone in", "At least one mentioned person must be on this list. The most effective filter for \"notify when X is mentioned\" workflows."],
-  ["channels", "Only these channels", "Not used means every channel the bot is in."],
-  ["excludeChannels", "Never these channels", "Channels to ignore."],
+  ["channels", "Only these conversations", "Channels, private channels, DMs and group DMs, by ID. Not used means every conversation the bot is in."],
+  ["excludeChannels", "Never these conversations", "Conversations to ignore, by ID."],
   ["users", "Only from these people", "Only messages written by someone on this list."],
   ["excludeUsers", "Never from these people", "Messages from anyone on this list are ignored."],
 ];
@@ -101,7 +101,6 @@ export function RouteEditor({
   const [triggers, setTriggers] = useState<TriggerNode[] | null>(null);
   // Editing an existing route skips the template step; a new one starts there.
   const [templateId, setTemplateId] = useState(route ? "custom" : "");
-  const [fineTuneOpen, setFineTuneOpen] = useState(Boolean(route));
   const action = useAction();
   const template = templates.find((t) => t.id === templateId);
   const lists = Object.keys(config.lists);
@@ -119,10 +118,7 @@ export function RouteEditor({
   const applyTemplate = (id: string) => {
     setTemplateId(id);
     const t = templates.find((x) => x.id === id);
-    if (!t) {
-      setFineTuneOpen(true);
-      return;
-    }
+    if (!t) return;
     setR((prev) => ({
       ...prev,
       on: structuredClone(t.on),
@@ -132,8 +128,6 @@ export function RouteEditor({
     }));
     if (t.on.type === "event") setEventsText(t.on.events.join(", "));
     setListTexts(Object.fromEntries(LIST_FIELDS.map(([k]) => [k, listRefText(t.filters?.[k])])));
-    // Templates that still need input open the fine-tuning section.
-    setFineTuneOpen(Boolean(t.todo));
   };
 
   useEffect(() => {
@@ -181,6 +175,7 @@ export function RouteEditor({
   const chosen = templateId !== "";
   const [picking, setPicking] = useState(false);
   const activeFilters = Object.keys(built.filters ?? {}).length + (built.match?.length ?? 0);
+  const warnings = routeWarnings(built);
   // New routes number the template step first; editing starts at the destination.
   const n = route ? 0 : 1;
   // Slack commands and interactions have no filters to set.
@@ -249,7 +244,7 @@ export function RouteEditor({
 
           {chosen && (
             <>
-              <Block n={n + 1} id="step-where" title="Which requests go to which workflow?" hint="The workflow's trigger decides which requests matter, so they are chosen together.">
+              <Block n={n + 1} id="step-where" tag="Required" title="Which requests go to which workflow?" hint="The workflow's trigger decides which requests matter, so they are chosen together.">
                 {usableTriggers.length > 0 && (
                   <Field label="Pick a trigger from n8n" hint="Fills in the URL below and suggests a name.">
                     <select
@@ -324,39 +319,20 @@ export function RouteEditor({
                 <Block
                   n={n + 2}
                   id="step-tune"
+                  tag={activeFilters === 0 ? "Optional · none set" : `Optional · ${activeFilters} on`}
                   title="Filters"
-                  hint="Optional. Filters are what save executions. Keep each one at least as loose as the workflow's own checks: the gateway may pass on something the workflow then ignores, but must never drop something it would act on."
+                  hint="Narrow what gets through. A request must pass every filter you set, not just one. Keep each at least as loose as the workflow's own checks: the gateway may pass on something the workflow then ignores, but must never drop something it would act on."
                 >
                   {template?.todo && <div className="notice ok small">{template.todo}</div>}
-                  <details className="disclosure" open={fineTuneOpen} onToggle={(e) => setFineTuneOpen((e.target as HTMLDetailsElement).open)}>
-                    <summary>
-                      <span>
-                        {fineTuneOpen ? "Hide filters" : "Show filters"}
-                        <span className="muted small"> · {activeFilters === 0 ? "none set" : `${activeFilters} on`}</span>
-                      </span>
-                      <span className="chev">
-                        <Icon name="chevron" size={16} />
-                      </span>
-                    </summary>
-                    <div className="disclosure-body">
-                      {!isSlack ? (
-                        <SourceFilters source={source} conditions={r.match ?? []} setConditions={(match) => setR({ ...r, match })} lists={lists} />
-                      ) : (
-                        <FineTune
-                          f={f}
-                          setFilter={setFilter}
-                          toggleIn={toggleIn}
-                          listTexts={listTexts}
-                          setListTexts={setListTexts}
-                          n8nConnected={Boolean(status.n8n)}
-                        />
-                      )}
-                    </div>
-                  </details>
+                  {!isSlack ? (
+                    <SourceFilters source={source} conditions={r.match ?? []} setConditions={(match) => setR({ ...r, match })} lists={lists} />
+                  ) : (
+                    <FineTune f={f} setFilter={setFilter} toggleIn={toggleIn} listTexts={listTexts} setListTexts={setListTexts} n8nConnected={Boolean(status.n8n)} warnings={warnings} />
+                  )}
                 </Block>
               )}
 
-              <Block n={n + (showFilters ? 3 : 2)} id="step-mode" title="Name it and start in" hint="Shadow lets you watch what a route's filters would drop before they drop anything. Event types the route doesn't list are dropped either way.">
+              <Block n={n + (showFilters ? 3 : 2)} id="step-mode" tag="Required" title="Name it and start in" hint="Shadow lets you watch what a route's filters would drop before they drop anything. Event types the route doesn't list are dropped either way.">
                 <Field label="Route name" hint="Shown in stats and logs. Letters, digits and dashes work best.">
                   <input type="text" value={r.name} onChange={(e) => setR({ ...r, name: e.target.value })} required />
                 </Field>
@@ -399,6 +375,11 @@ export function RouteEditor({
                   <p key={s}>{s}</p>
                 ))}
               </div>
+              {warnings.filter((w) => w.group !== "where" || !w.text.startsWith("Both")).map((w) => (
+                <div key={w.text} className="notice warn small" role="status">
+                  {w.text}
+                </div>
+              ))}
               {!isSlack ? <TryPayload route={built} app={app} lists={config.lists} /> : built.on.type === "event" && <TryMessage route={built} lists={config.lists} />}
             </div>
           </aside>
@@ -438,7 +419,7 @@ const TEMPLATE_ICON: Record<string, IconName> = {
   custom: "sliders",
 };
 
-function Block({ n, id, title, hint, children }: { n: number; id: string; title: string; hint?: string; children: ReactNode }) {
+function Block({ n, id, title, hint, tag, children }: { n: number; id: string; title: string; hint?: string; tag?: string; children: ReactNode }) {
   return (
     <section className="block" aria-labelledby={id}>
       <header className="block-head">
@@ -447,6 +428,7 @@ function Block({ n, id, title, hint, children }: { n: number; id: string; title:
           <h3 id={id}>{title}</h3>
           {hint && <p className="muted small">{hint}</p>}
         </div>
+        {tag && <span className="block-tag">{tag}</span>}
       </header>
       <div className="block-body">{children}</div>
     </section>
@@ -517,6 +499,35 @@ function SlackRequests(p: { r: Route; setR: (r: Route) => void; eventsText: stri
   );
 }
 
+/** One narrowing filter group: a row that says what it does and whether it's set, and opens to its fields. */
+function FilterGroup(p: { id: FilterGroupId; title: string; hint: string; count: number; warnings: RouteWarning[]; children: ReactNode }) {
+  const warns = p.warnings.filter((w) => w.group === p.id);
+  const [open, setOpen] = useState(p.count > 0 || warns.length > 0);
+  return (
+    <details className={`fgroup${p.count ? " active" : ""}`} open={open} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+      <summary>
+        <span className="fgroup-text">
+          <strong>{p.title}</strong>
+          <span className="muted small">{p.hint}</span>
+        </span>
+        {warns.length > 0 && <span className="badge shadow">Check</span>}
+        <span className={`badge${p.count ? " on" : ""}`}>{p.count ? `${p.count} on` : "Not set"}</span>
+        <span className="chev">
+          <Icon name="chevron" size={16} />
+        </span>
+      </summary>
+      <div className="fgroup-body">
+        {warns.map((w) => (
+          <div key={w.text} className="notice warn small" role="status">
+            {w.text}
+          </div>
+        ))}
+        {p.children}
+      </div>
+    </details>
+  );
+}
+
 /** Narrowing filters for Slack events. The request kind and event types are chosen with the destination. */
 function FineTune(p: {
   f: EventFilters;
@@ -525,68 +536,76 @@ function FineTune(p: {
   listTexts: Record<string, string>;
   setListTexts: (t: Record<string, string>) => void;
   n8nConnected: boolean;
+  warnings: RouteWarning[];
 }) {
-  const { f, setFilter, toggleIn } = p;
+  const { f, setFilter, toggleIn, warnings } = p;
+  const set = (key: string) => Boolean((p.listTexts[key] ?? "").trim());
+  const picker = (key: ListField) => {
+    const [, label, hint] = LIST_FIELDS.find(([k]) => k === key)!;
+    return <ListPicker key={key} field={key} label={label} hint={hint} value={p.listTexts[key] ?? ""} onChange={(v) => p.setListTexts({ ...p.listTexts, [key]: v })} n8nConnected={p.n8nConnected} />;
+  };
   return (
-    <div className="tune">
-      <div className="tune-group">
-        <h4 className="tune-title" id="tune-subtypes">
-          Message kinds to keep
-        </h4>
+    <div className="fgroups">
+      <FilterGroup id="kind" title="Kind of message" hint="New message, edit, delete, file…" count={f.subtypes?.length ? 1 : 0} warnings={warnings}>
         <p className="tune-hint">None selected keeps every kind.</p>
-        <div className="chips" role="group" aria-labelledby="tune-subtypes">
+        <div className="chips" role="group" aria-label="Kind of message">
           {SUBTYPES.map(([v, label]) => (
             <Chip key={v || "plain"} checked={(f.subtypes ?? []).includes(v)} onChange={(on) => toggleIn("subtypes", v, on)}>
               {label}
             </Chip>
           ))}
         </div>
-      </div>
+      </FilterGroup>
 
-      <div className="tune-group">
-        <h4 className="tune-title">Rules</h4>
-        <div className="toggles">
-          <Toggle checked={Boolean(f.ignoreBots)} onChange={(on) => setFilter({ ignoreBots: on || undefined })} title="Ignore bot posts" />
-          <Toggle checked={Boolean(f.requireMention)} onChange={(on) => setFilter({ requireMention: on || undefined })} title="Must mention someone" />
-          <Toggle checked={Boolean(f.ignoreSelfMention)} onChange={(on) => setFilter({ ignoreSelfMention: on || undefined })} title="Mentioning yourself doesn't count" />
-        </div>
-      </div>
-
-      <div className="tune-group">
-        <h4 className="tune-title" id="tune-conversation">
+      <FilterGroup
+        id="where"
+        title="Where it was posted"
+        hint="Public or private channel, DM, or specific conversations"
+        count={(f.channelTypes?.length ? 1 : 0) + Number(set("channels")) + Number(set("excludeChannels"))}
+        warnings={warnings}
+      >
+        <div className="tune-sub" id="tune-conversation">
           Conversation type
-        </h4>
-        <p className="tune-hint">None selected keeps all.</p>
-        <div className="chips" role="group" aria-labelledby="tune-conversation">
+        </div>
+        <p className="tune-hint">Any conversation of the chosen kinds. None selected keeps all.</p>
+        <div className="chips" role="group" aria-labelledby="tune-conversation" style={{ marginBottom: 14 }}>
           {CHANNEL_TYPES.map(([v, label]) => (
             <Chip key={v} checked={(f.channelTypes ?? []).includes(v)} onChange={(on) => toggleIn("channelTypes", v, on)}>
               {label}
             </Chip>
           ))}
         </div>
-      </div>
+        {picker("channels")}
+        {picker("excludeChannels")}
+      </FilterGroup>
 
-      <div className="tune-group">
-        <h4 className="tune-title">People and channels</h4>
-        {LIST_FIELDS.map(([key, label, hint]) => (
-          <ListPicker
-            key={key}
-            field={key}
-            label={label}
-            hint={hint}
-            value={p.listTexts[key] ?? ""}
-            onChange={(v) => p.setListTexts({ ...p.listTexts, [key]: v })}
-            n8nConnected={p.n8nConnected}
-          />
-        ))}
-      </div>
+      <FilterGroup id="who" title="Who wrote it" hint="Specific people, or skip bots" count={Number(Boolean(f.ignoreBots)) + Number(set("users")) + Number(set("excludeUsers"))} warnings={warnings}>
+        <div className="toggles" style={{ marginTop: 0 }}>
+          <Toggle checked={Boolean(f.ignoreBots)} onChange={(on) => setFilter({ ignoreBots: on || undefined })} title="Ignore bot posts" />
+        </div>
+        {picker("users")}
+        {picker("excludeUsers")}
+      </FilterGroup>
 
-      <div className="tune-group">
-        <h4 className="tune-title">Text</h4>
+      <FilterGroup
+        id="mentions"
+        title="Who it mentions"
+        hint="Only messages that @mention someone"
+        count={Number(Boolean(f.requireMention)) + Number(Boolean(f.ignoreSelfMention)) + Number(set("mentionIn"))}
+        warnings={warnings}
+      >
+        <div className="toggles" style={{ marginTop: 0 }}>
+          <Toggle checked={Boolean(f.requireMention)} onChange={(on) => setFilter({ requireMention: on || undefined })} title="Must mention someone" />
+          <Toggle checked={Boolean(f.ignoreSelfMention)} onChange={(on) => setFilter({ ignoreSelfMention: on || undefined })} title="Mentioning yourself doesn't count" />
+        </div>
+        {picker("mentionIn")}
+      </FilterGroup>
+
+      <FilterGroup id="text" title="What it says" hint="Match a word or pattern in the text" count={f.textMatches ? 1 : 0} warnings={warnings}>
         <Field label="Text must match (optional)" hint="A JavaScript regular expression tested against the message text, e.g. \b[Dd]eploy matches deploy, Deploy and deploying.">
           <input type="text" className="mono" value={f.textMatches ?? ""} onChange={(e) => setFilter({ textMatches: e.target.value || undefined })} />
         </Field>
-      </div>
+      </FilterGroup>
     </div>
   );
 }

@@ -43,6 +43,46 @@ export function summarizeRoute(route: Route, source: SourceType = "slack"): stri
   return sentences;
 }
 
+export type FilterGroupId = "kind" | "where" | "who" | "mentions" | "text";
+
+/** A combination of settings that is allowed but probably not what was meant. */
+export interface RouteWarning {
+  group: FilterGroupId;
+  text: string;
+}
+
+/**
+ * Settings of a Slack event route that cancel each other out or only partly
+ * apply. Filters combine with AND, so these never error: they silently drop.
+ */
+export function routeWarnings(route: Route): RouteWarning[] {
+  if (route.on.type !== "event") return [];
+  const f: EventFilters = route.filters ?? {};
+  const events = route.on.events;
+  const every = events.length === 0 || events.includes("*");
+  const others = every ? [] : events.filter((e) => e !== "message");
+  const hasOthers = every || others.length > 0;
+  const which = every ? "every event type" : joinWords(others);
+  const out: RouteWarning[] = [];
+
+  if (f.channelTypes?.length && hasOthers) {
+    out.push({
+      group: "where",
+      text: `Slack states the conversation type only on messages. ${which} carry none, so this filter drops them. Leave the conversation type empty, or limit the event types to message.`,
+    });
+  }
+  if (f.channelTypes?.length && f.channels) {
+    out.push({ group: "where", text: "Both apply: a request must be in one of these kinds of conversation and in one of the listed conversations." });
+  }
+  if (f.subtypes?.length && !f.subtypes.includes("") && hasOthers) {
+    out.push({ group: "kind", text: `${which} count as a new message here, and “New message” isn't ticked, so they are dropped.` });
+  }
+  if (f.ignoreBots && f.subtypes?.includes("bot_message")) {
+    out.push({ group: "who", text: "Bot messages are kept under message kinds, but “Ignore bot posts” drops them again." });
+  }
+  return out;
+}
+
 function summarizeSourceRoute(route: Route, source: SourceType): string[] {
   const info = sourceInfo(source);
   const events = route.on.type === "event" ? route.on.events : [];

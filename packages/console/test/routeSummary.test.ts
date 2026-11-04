@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Route } from "@gw/shared";
-import { summarizeRoute } from "../src/web/routeSummary";
+import { routeWarnings, summarizeRoute } from "../src/web/routeSummary";
 import { ROUTE_TEMPLATES } from "../src/web/components/templates";
 
 const fromTemplate = (id: string, patch: Partial<Route> = {}): Route => {
@@ -48,5 +48,33 @@ describe("summarizeRoute", () => {
 
   it("warns when a route has no filters", () => {
     expect(text({ name: "r", forwardTo: "https://n8n.test/x", on: { type: "event", events: ["message"] } })).toContain("saves nothing yet");
+  });
+});
+
+describe("routeWarnings", () => {
+  const route = (events: string[], filters: Route["filters"]): Route => ({ name: "r", forwardTo: "https://n8n.test/x", on: { type: "event", events }, filters });
+
+  it("is quiet for sensible routes", () => {
+    expect(routeWarnings(route(["message"], { channelTypes: ["group"], ignoreBots: true }))).toEqual([]);
+    expect(routeWarnings({ name: "r", forwardTo: "x", on: { type: "command", commands: ["/ask"] } })).toEqual([]);
+  });
+
+  it("flags a conversation type with events that carry none", () => {
+    const w = routeWarnings(route(["message", "reaction_added"], { channelTypes: ["im"] }));
+    expect(w.map((x) => x.group)).toEqual(["where"]);
+    expect(w[0].text).toContain("reaction_added");
+    expect(routeWarnings(route([], { channelTypes: ["im"] }))[0].text).toContain("every event type");
+  });
+
+  it("says that type and channels both apply", () => {
+    const w = routeWarnings(route(["message"], { channelTypes: ["group"], channels: ["C1"] }));
+    expect(w).toHaveLength(1);
+    expect(w[0].text).toContain("Both apply");
+  });
+
+  it("flags message kinds that drop other events, and bots kept then ignored", () => {
+    expect(routeWarnings(route(["message", "app_mention"], { subtypes: ["file_share"] }))[0].group).toBe("kind");
+    expect(routeWarnings(route(["message", "app_mention"], { subtypes: ["", "file_share"] }))).toEqual([]);
+    expect(routeWarnings(route(["message"], { subtypes: ["bot_message"], ignoreBots: true }))[0].group).toBe("who");
   });
 });
