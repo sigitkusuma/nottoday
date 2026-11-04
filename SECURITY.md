@@ -49,4 +49,4 @@ While the console is open, it opens a Cloudflare tail session for the gateway Wo
 
 ## Reporting a vulnerability
 
-Please report security problems privately to the maintainers rather than in a public issue.
+Please report security problems privately rather than in a public issue: use [Report a vulnerability](https://github.com/sigitkusuma/nottoday/security/advisories/new) on the repository's Security tab.

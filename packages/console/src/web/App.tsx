@@ -11,6 +11,7 @@ import { Dashboard } from "./components/Dashboard";
 import { History } from "./components/History";
 import { Icon, type IconName } from "./components/icons";
 import { Lists } from "./components/Lists";
+import { Logo } from "./components/Logo";
 import { Live } from "./components/Live";
 import { N8n } from "./components/N8n";
 import { Setup } from "./components/Setup";
@@ -131,9 +132,7 @@ function Sidebar({ status, tab, goTo }: { status: Status; tab: Tab; goTo: GoTo }
   return (
     <aside className="sidebar">
       <div className="brand">
-        <span className="brand-mark" aria-hidden="true">
-          <Icon name="activity" size={17} />
-        </span>
+        <Logo size={30} />
         <span>
           <div className="brand-name">Not Today</div>
           <div className="brand-sub">Saving n8n executions, one "nope" at a time</div>

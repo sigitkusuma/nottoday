@@ -1,3 +1,5 @@
+<img src="docs/logo.svg" width="64" height="64" alt="">
+
 # Not Today
 
 **Saving your n8n executions, one "nope" at a time.**

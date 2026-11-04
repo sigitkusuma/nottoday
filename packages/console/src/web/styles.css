@@ -17,6 +17,8 @@
   --ink-text: #ffffff;
   --accent: #2459d9;
   --accent-soft: #e8eefc;
+  /* Only the logo uses it, so it never competes with the status colors. */
+  --brand: #e2482f;
   --ok: #17753f;
   --ok-soft: #e4f5ea;
   --ok-dot: #22a35a;
@@ -101,10 +103,7 @@ p { margin: 0 0 12px; }
   padding: 18px 12px 14px; background: var(--surface); border-right: 1px solid var(--border);
 }
 .brand { display: flex; align-items: center; gap: 10px; padding: 4px 10px 16px; }
-.brand-mark {
-  width: 30px; height: 30px; border-radius: 8px; background: var(--ink); color: var(--ink-text);
-  display: grid; place-items: center; flex: none;
-}
+.brand-mark { display: block; flex: none; }
 .brand-name { font-weight: 700; font-size: 15px; line-height: 1.15; }
 .brand-sub { font-size: 12px; color: var(--muted); }
 .nav { display: flex; flex-direction: column; gap: 2px; }
@@ -536,7 +535,6 @@ button.rail-btn:hover .rail-title { text-decoration: underline; }
 /* ---------- First run, checklist, account and list pages ---------- */
 .welcome { max-width: 820px; margin: 36px auto 72px; padding: 0 16px; }
 .welcome-head { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
-.welcome-head .brand-mark { width: 46px; height: 46px; border-radius: 12px; }
 .welcome-head p { margin: 2px 0 0; }
 .flow { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; gap: 10px; margin: 0 0 22px; }
 .flow-node { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }

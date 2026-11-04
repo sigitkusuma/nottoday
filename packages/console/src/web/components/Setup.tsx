@@ -5,6 +5,7 @@ import { api } from "../api";
 import type { Status } from "../types";
 import { SavedAccountsBar } from "./Connections";
 import { Icon } from "./icons";
+import { Logo } from "./Logo";
 import { SecretField } from "./parts";
 import { TokenGuide } from "./TokenGuide";
 import { ErrorNotice, Field, useAction } from "./ui";
@@ -24,9 +25,7 @@ export function Setup({ status, onChange }: { status: Status; onChange: () => vo
   return (
     <div className="welcome">
       <header className="welcome-head">
-        <span className="brand-mark" aria-hidden="true">
-          <Icon name="activity" size={20} />
-        </span>
+        <Logo size={46} />
         <div>
           <h1>Set up the gateway</h1>
           <p className="muted">A Cloudflare Worker in your own account, on the free plan. Two short steps.</p>
