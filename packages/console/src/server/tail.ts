@@ -13,7 +13,12 @@ export interface LiveDecision {
   filter: string;
   reason?: string;
   forwarded: boolean;
+  /** What n8n answered; absent when it never did. */
   status?: number;
+  /** How many tries the forward took (it retries when n8n is briefly unavailable). */
+  attempts?: number;
+  /** Why the forward failed, when it did. */
+  error?: string;
 }
 
 export interface LiveEvent {
@@ -27,6 +32,8 @@ export interface LiveEvent {
   subtype?: string;
   channel?: string;
   retry?: string;
+  /** Slack's reason for the retry, e.g. "http_timeout". */
+  retryReason?: string;
   routes?: LiveDecision[];
   message?: string;
 }
@@ -89,6 +96,7 @@ export function parseTailMessage(text: string): LiveEvent[] {
             subtype: str(line.subtype),
             channel: str(line.channel),
             retry: str(line.retry),
+            retryReason: str(line.retryReason),
             routes: Array.isArray(line.routes) ? (line.routes as LiveDecision[]) : [],
             message: line.outcome === "duplicate retry skipped" ? "Skipped as a duplicate retry (older engine)." : undefined,
           });

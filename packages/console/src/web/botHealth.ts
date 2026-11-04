@@ -94,6 +94,9 @@ const STATUS_HINT: [(s: number) => boolean, string][] = [
   [(s) => s >= 500, "5xx can mean n8n is down or out of executions."],
 ];
 
+/** What a status n8n answered usually means, in a sentence; empty when there is nothing useful to say. */
+export const statusHint = (status: number): string => STATUS_HINT.find(([test]) => test(status))?.[1] ?? "";
+
 /** "support / triage got HTTP 404 (3×). 404 usually means…" */
 export function errorDetail(failing: RouteSummary[]): string {
   const byStatus = new Map<number, number>();

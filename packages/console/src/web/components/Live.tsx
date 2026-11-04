@@ -4,16 +4,15 @@
  * available, the page falls back to stats, which lag a minute or two.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { api } from "../api";
-import { decisionTone, eventTone, type PulseTone } from "../botHealth";
+import { useMemo, useRef, useState } from "react";
+import { eventTone, type PulseTone } from "../botHealth";
 import { useConfig } from "../config";
-import type { RecentDecision } from "../types";
 import { useLive, type LiveEvent } from "../useLive";
+import type { GoTo } from "../App";
+import { ActivityDetail } from "./ActivityDetail";
 import { Icon } from "./icons";
 import { describe } from "./LiveCheck";
 import { Empty, PageHead, PulseLegend, StatusPill } from "./parts";
-import { ErrorNotice, timeAgo, useAction } from "./ui";
 
 const SHORT: Record<PulseTone, string> = { sent: "Sent to n8n", saved: "Dropped", shadow: "Shadow", unrouted: "Not routed", error: "n8n error", bad: "Rejected", info: "URL check" };
 
@@ -28,12 +27,16 @@ const FILTERS: [Filter, string][] = [
   ["bad", "Rejected"],
 ];
 
-export function Live() {
+/** The same request keeps the same id while rows arrive above it. */
+const eventId = (e: LiveEvent) => [e.time, e.app, e.kind, e.type, e.subtype, e.channel].join("|");
+
+export function Live({ goTo }: { goTo: GoTo }) {
   const live = useLive();
   const { config } = useConfig();
   const [bot, setBot] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [paused, setPaused] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(null);
   const frozen = useRef<LiveEvent[]>([]);
   if (!paused) frozen.current = live.events;
   const source = paused ? frozen.current : live.events;
@@ -61,108 +64,73 @@ export function Live() {
         }
       />
 
-      {live.state === "unavailable" ? (
-        <>
-          <div className="notice warn small">{live.message} Showing stats instead: they appear a minute or two after each request.</div>
-          <FromStats />
-        </>
-      ) : (
-        <>
-          <div className="feed-bar">
-            <select aria-label="Show one app" value={bot} onChange={(e) => setBot(e.target.value)}>
-              <option value="">All apps</option>
-              {Object.keys(config?.apps ?? {}).map((k) => (
-                <option key={k}>{k}</option>
-              ))}
-            </select>
-            <div className="seg" role="group" aria-label="Show">
-              {FILTERS.map(([id, label]) => (
-                <button key={id} type="button" aria-pressed={filter === id} onClick={() => setFilter(id)}>
-                  {label}
-                </button>
-              ))}
-            </div>
-            <button type="button" className="btn sm" onClick={() => setPaused(!paused)} aria-pressed={paused}>
-              <Icon name={paused ? "play" : "pause"} size={14} /> {paused ? (behind > 0 ? `Resume (${behind} new)` : "Resume") : "Pause"}
-            </button>
-            <PulseLegend />
-          </div>
-
-          {rows.length === 0 ? (
-            <Empty title={source.length === 0 ? (live.state === "connecting" ? "Connecting to the gateway…" : "Waiting for the next request") : "Nothing matches this filter"}>
-              {source.length === 0 ? "Send something from a connected app, e.g. a Slack message. It shows up here within a second or two." : "Change the app or the filter above to see more."}
-            </Empty>
-          ) : (
-            <div className="feed" aria-live={paused ? "off" : "polite"}>
-              {rows.map((e, i) => {
-                const t = eventTone(e);
-                return (
-                  <div className={`feed-row${!paused && Date.parse(e.time) > openedAt ? " new" : ""}`} key={`${e.time}-${i}`}>
-                    <span className="t">{new Date(e.time).toLocaleTimeString()}</span>
-                    <span className="who">{e.app ?? "—"}</span>
-                    <span className="what">
-                      {describe(e)}
-                      {e.channel && <small className="mono">{e.channel}</small>}
-                    </span>
-                    <span className={`pill ${t.tone}`} title={t.title}>
-                      {SHORT[t.tone]}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </>
+      {live.state === "unavailable" && (
+        <div className="notice warn small">{live.message} Showing what the stats table has instead: it lags a minute or two behind each request.</div>
       )}
-    </div>
-  );
-}
+      {live.state === "connecting" && live.message && <div className="notice info small">{live.message} The activity below is kept; new requests appear once it's back.</div>}
+      <div className="feed-bar">
+        <select aria-label="Show one app" value={bot} onChange={(e) => setBot(e.target.value)}>
+          <option value="">All apps</option>
+          {Object.keys(config?.apps ?? {}).map((k) => (
+            <option key={k}>{k}</option>
+          ))}
+        </select>
+        <div className="seg" role="group" aria-label="Show">
+          {FILTERS.map(([id, label]) => (
+            <button key={id} type="button" aria-pressed={filter === id} onClick={() => setFilter(id)}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <button type="button" className="btn sm" onClick={() => setPaused(!paused)} aria-pressed={paused}>
+          <Icon name={paused ? "play" : "pause"} size={14} /> {paused ? (behind > 0 ? `Resume (${behind} new)` : "Resume") : "Pause"}
+        </button>
+        <PulseLegend />
+      </div>
 
-function FromStats() {
-  const [rows, setRows] = useState<RecentDecision[] | null>(null);
-  const action = useAction();
-  const load = () => action.run(async () => setRows((await api<{ decisions: RecentDecision[] }>("GET", "/stats/recent")).decisions));
-
-  useEffect(() => {
-    void load();
-    const timer = setInterval(() => void load(), 15_000);
-    return () => clearInterval(timer);
-  }, []);
-
-  return (
-    <>
-      <ErrorNotice error={action.error} />
-      {rows && rows.length === 0 && <Empty title="Nothing in the last 24 hours">Is the app's webhook URL pointing at the gateway?</Empty>}
-      {rows && rows.length > 0 && (
-        <div className="feed">
-          {rows.map((r, i) => {
-            const t = decisionTone(r);
+      {rows.length === 0 ? (
+        <Empty title={source.length === 0 ? (live.state === "connecting" ? "Connecting to the gateway…" : "Waiting for the next request") : "Nothing matches this filter"}>
+          {source.length === 0 ? "Send something from a connected app, e.g. a Slack message. It shows up here within a second or two." : "Change the app or the filter above to see more."}
+        </Empty>
+      ) : (
+        <div className="feed" aria-live={paused ? "off" : "polite"}>
+          {rows.map((e, i) => {
+            const t = eventTone(e);
+            const id = eventId(e);
+            const open = openId === id;
+            const detailId = `activity-detail-${i}`;
             return (
-            <div className="feed-row" key={`${r.time}-${i}`}>
-              <span className="t">{timeAgo(r.time)}</span>
-              <span className="who">{r.app}</span>
-              <span className="what">
-                {r.outcome === "dropped"
-                  ? `Dropped (${r.reason})`
-                  : r.outcome === "unrouted"
-                    ? "No route lists this event"
-                    : r.mode === "shadow" && r.filter === "fail"
-                      ? `Forwarded, would drop (${r.reason})`
-                      : r.outcome === "forwarded" && r.status
-                        ? `Forwarded (n8n ${r.status})`
-                        : r.outcome}
-                <small>
-                  {[r.route, [r.kind, r.type].filter(Boolean).join(": ")].filter(Boolean).join(" · ")}
-                </small>
-              </span>
-              <span className={`pill ${t.tone}`} title={t.title}>
-                {SHORT[t.tone]}
-              </span>
-            </div>
+              <div className={`feed-item${open ? " open" : ""}`} key={`${id}-${i}`}>
+                <button
+                  type="button"
+                  className={`feed-row${!paused && Date.parse(e.time) > openedAt ? " new" : ""}`}
+                  aria-expanded={open}
+                  aria-controls={open ? detailId : undefined}
+                  onClick={() => setOpenId(open ? null : id)}
+                >
+                  <span className="t">{new Date(e.time).toLocaleTimeString()}</span>
+                  <span className="who">{e.app ?? "—"}</span>
+                  <span className="what">
+                    {describe(e)}
+                    {e.channel && <small className="mono">{e.channel}</small>}
+                  </span>
+                  <span className={`pill ${t.tone}`} title={t.title}>
+                    {SHORT[t.tone]}
+                  </span>
+                  <span className="feed-chev" aria-hidden="true">
+                    <Icon name="chevron" size={16} />
+                  </span>
+                </button>
+                {open && (
+                  <div id={detailId} className="feed-detail">
+                    <ActivityDetail e={e} appHasRoutes={Boolean(e.app && (config?.apps[e.app]?.routes.length ?? 0) > 0)} goTo={goTo} />
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
       )}
-    </>
+    </div>
   );
 }

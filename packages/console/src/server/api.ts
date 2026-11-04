@@ -302,7 +302,11 @@ export function createApi(deps: ApiDeps = {}): Hono {
 
   api.get("/stats/summary", async (c) => c.json({ routes: await stats(await loadState()).summary(days(c, 1)) }));
   api.get("/stats/daily", async (c) => c.json({ days: await stats(await loadState()).daily(days(c, 30)) }));
-  api.get("/stats/recent", async (c) => c.json({ decisions: await stats(await loadState()).recent() }));
+  api.get("/stats/recent", async (c) => {
+    const limit = Number(c.req.query("limit") ?? 50);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 500) throw new UserError("limit must be between 1 and 500");
+    return c.json({ decisions: await stats(await loadState()).recent(limit) });
+  });
   api.get("/stats/unrouted", async (c) => c.json({ rows: await stats(await loadState()).unrouted(days(c, 1)) }));
   api.get("/stats/apps", async (c) => c.json({ apps: await stats(await loadState()).appSignals() }));
 

@@ -286,6 +286,16 @@ describe("events no route uses", () => {
     expect(q).toContain("INTERVAL '1' DAY");
     expect((await call("GET", "/stats/unrouted?days=3")).status).toBe(400);
   });
+
+  it("recent decisions take a row limit, for filling the activity feed after a reload", async () => {
+    await connectAndInstall();
+    cf.sqlRows = [];
+    await call("GET", "/stats/recent?limit=300");
+    expect(cf.sqlQueries.at(-1)).toContain("LIMIT 300");
+    await call("GET", "/stats/recent");
+    expect(cf.sqlQueries.at(-1)).toContain("LIMIT 50");
+    expect((await call("GET", "/stats/recent?limit=9999")).status).toBe(400);
+  });
 });
 
 describe("reconnecting to a gateway that's already in the account", () => {

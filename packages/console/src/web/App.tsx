@@ -97,7 +97,7 @@ export function App() {
               <main className="main" id="main">
                 {tab === "overview" && <Dashboard status={status} onStatusChange={refresh} goTo={goTo} />}
                 {tab === "apps" && <Apps status={status} sub={sub} goTo={goTo} draft={draft} onDraftUsed={clearDraft} />}
-                {tab === "live" && <Live />}
+                {tab === "live" && <Live goTo={goTo} />}
                 {tab === "lists" && <Page><Lists status={status} /></Page>}
                 {tab === "n8n" && <Page><N8n status={status} onStatusChange={refresh} onStartRoute={(d) => (setDraft(d), goTo("apps"))} /></Page>}
                 {tab === "history" && <Page><History status={status} onStatusChange={refresh} goTo={goTo} /></Page>}

@@ -739,3 +739,53 @@ textarea.payload { min-height: 140px; max-width: none; margin-bottom: 4px; }
 .notice.info { background: var(--info-soft); border-color: var(--info-dot); }
 .notice.noise ul { margin: 6px 0 4px; }
 .notice.noise p { margin: 0; color: var(--muted); }
+
+/* Activity: a row opens into its details */
+.feed-item { border-top: 1px solid var(--border); }
+.feed-item:first-child { border-top: 0; }
+.feed-item > .feed-row { width: 100%; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; grid-template-columns: 78px 130px minmax(0, 1fr) auto 18px; }
+.feed-item > .feed-row:hover, .feed-item.open > .feed-row { background: var(--sunken); }
+.feed-chev { display: grid; place-items: center; color: var(--faint); transition: transform 0.12s; }
+.feed-item.open .feed-chev { transform: rotate(180deg); }
+@media (max-width: 700px) { .feed-item > .feed-row { grid-template-columns: 1fr auto; } .feed-chev { display: none; } }
+.feed-detail { padding: 0 16px 16px; background: var(--sunken); }
+.activity-detail { padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.activity-detail.tone-bad, .activity-detail.tone-error { border-color: var(--bad-dot); }
+.activity-detail.tone-shadow { border-color: var(--warn-dot); }
+.detail-why p { margin: 6px 0 0; max-width: 78ch; }
+.detail-why .btn { margin-top: 10px; }
+.detail-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 16px 24px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+@media (max-width: 900px) { .detail-cols { grid-template-columns: minmax(0, 1fr); } }
+.detail-facts { margin: 0; }
+.detail-routes { min-width: 0; overflow-x: auto; }
+.mini-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.mini-table th, .mini-table td { padding: 6px 10px 6px 0; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); font-weight: 400; }
+.mini-table thead th { font-size: 12px; font-weight: 600; color: var(--muted); }
+.mini-table tbody th { font-weight: 600; }
+.mini-table tr:last-child th, .mini-table tr:last-child td { border-bottom: 0; }
+.detail-note { margin: 12px 0 0; }
+
+/* Activity: a row opens into its details */
+.feed-item { border-top: 1px solid var(--border); }
+.feed-item:first-child { border-top: 0; }
+.feed-item > .feed-row { width: 100%; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; grid-template-columns: 78px 130px minmax(0, 1fr) auto 18px; }
+.feed-item > .feed-row:hover, .feed-item.open > .feed-row { background: var(--sunken); }
+.feed-chev { display: grid; place-items: center; color: var(--faint); transition: transform 0.12s; }
+.feed-item.open .feed-chev { transform: rotate(180deg); }
+@media (max-width: 700px) { .feed-item > .feed-row { grid-template-columns: 1fr auto; } .feed-chev { display: none; } }
+.feed-detail { padding: 0 16px 16px; background: var(--sunken); }
+.activity-detail { padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.activity-detail.tone-bad, .activity-detail.tone-error { border-color: var(--bad-dot); }
+.activity-detail.tone-shadow { border-color: var(--warn-dot); }
+.detail-why p { margin: 6px 0 0; max-width: 78ch; }
+.detail-why .btn { margin-top: 10px; }
+.detail-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 16px 24px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+@media (max-width: 900px) { .detail-cols { grid-template-columns: minmax(0, 1fr); } }
+.detail-facts { margin: 0; }
+.detail-routes { min-width: 0; overflow-x: auto; }
+.mini-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.mini-table th, .mini-table td { padding: 6px 10px 6px 0; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); font-weight: 400; }
+.mini-table thead th { font-size: 12px; font-weight: 600; color: var(--muted); }
+.mini-table tbody th { font-weight: 600; }
+.mini-table tr:last-child th, .mini-table tr:last-child td { border-bottom: 0; }
+.detail-note { margin: 12px 0 0; }
