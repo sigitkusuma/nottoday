@@ -8,7 +8,8 @@ import { sourceInfo } from "../sources";
 import { Icon } from "./icons";
 import { Avatar, PulseStrip, StatusPill } from "./parts";
 
-export function BotCard({ bot, showCounts, onOpen }: { bot: Bot; showCounts: boolean; onOpen: () => void }) {
+/** `pulses` is off for an app of another account: the live stream belongs to the active one, and app names can repeat across accounts. */
+export function BotCard({ bot, showCounts, onOpen, pulses = true }: { bot: Bot; showCounts: boolean; onOpen: () => void; pulses?: boolean }) {
   const live = useLive();
   const { status, totals, app } = bot;
   const info = sourceInfo(sourceOf(app));
@@ -39,7 +40,7 @@ export function BotCard({ bot, showCounts, onOpen }: { bot: Bot; showCounts: boo
       )}
 
       <span className="bot-pulse">
-        <PulseStrip live={live.events} bot={bot.key} emptyText="" />
+        {pulses ? <PulseStrip live={live.events} bot={bot.key} emptyText="" /> : <span />}
         <span className="bot-seen">{bot.seen ? `Last event ${timeAgo(new Date(bot.seen).toISOString())}` : "No events yet"}</span>
       </span>
 

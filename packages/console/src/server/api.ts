@@ -9,7 +9,7 @@ import { BUNDLED_ENGINE_VERSION, ConflictError, Gateway, InputError, InvalidConf
 import { N8nApi, N8nError } from "./n8n";
 import { Stats } from "./stats";
 import { TailHub } from "./tail";
-import { TOOL_NAME, activateConnection, assignAccount, connectToken, listConnections, loadState, removeConnection, updateState, type LocalState } from "./store";
+import { TOOL_NAME, activateConnection, assignAccount, connectToken, connectionStates, listConnections, loadState, removeConnection, updateState, type LocalState } from "./store";
 
 export interface ApiDeps {
   fetchImpl?: typeof fetch;
@@ -144,6 +144,45 @@ export function createApi(deps: ApiDeps = {}): Hono {
   api.post("/connections/:id/activate", async (c) => {
     if (!(await activateConnection(c.req.param("id")))) throw new UserError("That connection no longer exists.", 404);
     return c.json({ ok: true });
+  });
+
+  /**
+   * What each saved account's gateway holds, read without switching to it: its apps, secrets check, health
+   * and stats. One account failing doesn't hide the others. `?others=1` leaves out the active account,
+   * which the console already has.
+   */
+  api.get("/overview", async (c) => {
+    const d = days(c, 7);
+    const skipActive = c.req.query("others") === "1";
+    const saved = (await connectionStates()).filter((x) => x.state.cloudflare?.accountId && x.state.gateway && !(skipActive && x.active));
+    const accounts = await Promise.all(
+      saved.map(async ({ id, active, state }) => {
+        const head = {
+          id,
+          active,
+          accountId: state.cloudflare!.accountId!,
+          accountName: state.cloudflare!.accountName ?? null,
+          scriptName: state.gateway!.scriptName,
+          url: state.gateway!.url,
+          statsEnabled: state.gateway!.stats !== false,
+        };
+        try {
+          const gw = gateway(state);
+          const [health, current] = await Promise.all([gw.health(), gw.readConfig()]);
+          const st = head.statsEnabled ? stats(state) : null;
+          // Stats being slow or off must not hide the apps, so a failure there only leaves the counts empty.
+          const [missingSecrets, routes, signals] = await Promise.all([
+            gw.appsMissingSecret(current.config),
+            st ? st.summary(d).catch(() => []) : [],
+            st ? st.appSignals().catch(() => []) : [],
+          ]);
+          return { ...head, health, apps: current.config.apps, missingSecrets, routes, signals };
+        } catch (err) {
+          return { ...head, error: err instanceof CloudflareError ? `Cloudflare: ${err.message}` : err instanceof Error ? err.message : "Couldn't read this account." };
+        }
+      }),
+    );
+    return c.json({ accounts });
   });
 
   api.delete("/connections/:id", async (c) => {

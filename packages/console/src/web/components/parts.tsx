@@ -2,6 +2,7 @@
 
 import { useId, useState, type ReactNode } from "react";
 import { pulse, type PulseTone, type Tone } from "../botHealth";
+import { useMaybeAccounts } from "../accounts";
 import { Icon } from "./icons";
 
 export function StatusPill({ tone, label, live }: { tone: Tone; label: string; live?: boolean }) {
@@ -48,6 +49,18 @@ export function PulseStrip({ live, bot, emptyText = "No events since you opened 
   );
 }
 
+/** Next to a page title when there are several accounts, so it's always clear which gateway the page is about. */
+function AccountChip() {
+  const acc = useMaybeAccounts();
+  if (!acc?.multiple || !acc.active) return null;
+  return (
+    <span className="acct-chip" title={`This page is about the gateway in ${acc.active.name}. Switch accounts at the top of the sidebar.`}>
+      <Avatar name={acc.active.name} size={16} />
+      {acc.active.name}
+    </span>
+  );
+}
+
 export function PageHead({ title, sub, actions, back }: { title: ReactNode; sub?: ReactNode; actions?: ReactNode; back?: { label: string; onClick: () => void } }) {
   return (
     <div className="page-head">
@@ -60,7 +73,10 @@ export function PageHead({ title, sub, actions, back }: { title: ReactNode; sub?
             </button>
           </div>
         )}
-        <h2>{title}</h2>
+        <div className="title-row">
+          <h2>{title}</h2>
+          <AccountChip />
+        </div>
         {sub && <p className="sub">{sub}</p>}
       </div>
       {actions && <div className="row">{actions}</div>}

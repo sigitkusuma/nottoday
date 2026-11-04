@@ -3,6 +3,8 @@
  * and every connected app as a card with its live status.
  */
 
+import { accountProblems } from "../accountSummary";
+import { useAccounts } from "../accounts";
 import { api } from "../api";
 import { useBots } from "../bots";
 import type { GoTo } from "../App";
@@ -10,6 +12,7 @@ import { useConfig } from "../config";
 import { RANGES, rangeLabel, useStats } from "../stats";
 import type { Status } from "../types";
 import { useLive } from "../useLive";
+import { AccountsStrip } from "./Accounts";
 import { describe } from "./LiveCheck";
 import { AddBotCard, BotCard } from "./BotCard";
 import { Icon } from "./icons";
@@ -22,6 +25,8 @@ export function Dashboard({ status, onStatusChange, goTo }: { status: Status; on
   const stats = useStats();
   const live = useLive();
   const bots = useBots();
+  const acc = useAccounts();
+  const open = useAction();
   const gw = status.gateway!;
 
   const routes = stats.routes ?? [];
@@ -35,6 +40,9 @@ export function Dashboard({ status, onStatusChange, goTo }: { status: Status; on
   const problems: { text: string; action?: { label: string; onClick: () => void } }[] = [];
   if (!gw.health.reachable) problems.push({ text: `The gateway at ${gw.url} isn't answering. It can take a minute after installing.` });
   for (const e of configErrors) problems.push({ text: `Stored config problem: ${e}` });
+
+  // Problems in the other accounts, so they can be seen without switching.
+  const elsewhere = acc.accounts.filter((a) => !a.active).flatMap((a) => accountProblems(a).map((p) => ({ account: a, ...p })));
 
   return (
     <div className="page">
@@ -56,11 +64,13 @@ export function Dashboard({ status, onStatusChange, goTo }: { status: Status; on
         }
       />
 
+      <AccountsStrip goTo={goTo} />
+
       <SetupChecklist status={status} config={config} signals={stats.signals} goTo={goTo} onStatusChange={onStatusChange} />
 
       {gw.upgradeAvailable && <UpgradeStrip current={gw.health.version ?? "?"} next={gw.bundledVersion} onDone={onStatusChange} />}
 
-      {(problems.length > 0 || needs.some((b) => b.status.tone === "bad")) && (
+      {(problems.length > 0 || elsewhere.length > 0 || needs.some((b) => b.status.tone === "bad")) && (
         <section className="attention" role="status" aria-labelledby="attn">
           <h3 id="attn">
             <Icon name="alert" size={16} /> Needs attention
@@ -81,7 +91,16 @@ export function Dashboard({ status, onStatusChange, goTo }: { status: Status; on
                   </button>
                 </li>
               ))}
+            {elsewhere.map((p) => (
+              <li key={p.account.id + p.text}>
+                <span>{p.text}</span>
+                <button type="button" className="btn sm" disabled={open.busy} onClick={() => void open.run(() => acc.open(p.account.id, p.appKey ? `apps/${p.appKey}` : "cloudflare"))}>
+                  Open
+                </button>
+              </li>
+            ))}
           </ul>
+          <ErrorNotice error={open.error} />
         </section>
       )}
 

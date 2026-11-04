@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import type { RouteDraft } from "./components/RouteEditor";
 import { api } from "./api";
+import { AccountsProvider } from "./accounts";
 import { useBots } from "./bots";
 import { ConfigProvider } from "./config";
+import { AccountSwitcher } from "./components/Accounts";
 import { Apps } from "./components/Apps";
 import { Connections } from "./components/Connections";
 import { Dashboard } from "./components/Dashboard";
@@ -82,22 +84,27 @@ export function App() {
     return <Setup status={status} onChange={refresh} />;
   }
 
+  // Each account is its own gateway. Keying the providers on the active account reloads the config, stats and
+  // live stream when switching, so nothing from one gateway is shown under another.
+  const activeId = status.connections.find((c) => c.active)?.id;
   return (
-    <ConfigProvider>
+    <ConfigProvider key={activeId}>
       <StatsProvider enabled={status.gateway.statsEnabled}>
         <LiveProvider>
-          <div className="app">
-            <Sidebar status={status} tab={tab} goTo={goTo} />
-            <main className="main" id="main">
-              {tab === "overview" && <Dashboard status={status} onStatusChange={refresh} goTo={goTo} />}
-              {tab === "apps" && <Apps status={status} sub={sub} goTo={goTo} draft={draft} onDraftUsed={clearDraft} />}
-              {tab === "live" && <Live />}
-              {tab === "lists" && <Page><Lists status={status} /></Page>}
-              {tab === "n8n" && <Page><N8n status={status} onStatusChange={refresh} onStartRoute={(d) => (setDraft(d), goTo("apps"))} /></Page>}
-              {tab === "history" && <Page><History status={status} onStatusChange={refresh} goTo={goTo} /></Page>}
-              {tab === "cloudflare" && <Page><Connections status={status} onStatusChange={refresh} goTo={goTo} /></Page>}
-            </main>
-          </div>
+          <AccountsProvider status={status} onStatusChange={refresh} goTo={goTo}>
+            <div className="app">
+              <Sidebar status={status} tab={tab} goTo={goTo} />
+              <main className="main" id="main">
+                {tab === "overview" && <Dashboard status={status} onStatusChange={refresh} goTo={goTo} />}
+                {tab === "apps" && <Apps status={status} sub={sub} goTo={goTo} draft={draft} onDraftUsed={clearDraft} />}
+                {tab === "live" && <Live />}
+                {tab === "lists" && <Page><Lists status={status} /></Page>}
+                {tab === "n8n" && <Page><N8n status={status} onStatusChange={refresh} onStartRoute={(d) => (setDraft(d), goTo("apps"))} /></Page>}
+                {tab === "history" && <Page><History status={status} onStatusChange={refresh} goTo={goTo} /></Page>}
+                {tab === "cloudflare" && <Page><Connections status={status} sub={sub} onStatusChange={refresh} goTo={goTo} /></Page>}
+              </main>
+            </div>
+          </AccountsProvider>
         </LiveProvider>
       </StatsProvider>
     </ConfigProvider>
@@ -132,6 +139,7 @@ function Sidebar({ status, tab, goTo }: { status: Status; tab: Tab; goTo: GoTo }
           <div className="brand-sub">Saving n8n executions, one "nope" at a time</div>
         </span>
       </div>
+      <AccountSwitcher goTo={goTo} />
       <nav className="nav" aria-label="Sections">
         {MAIN.map(item)}
         <div className="nav-label">Settings</div>
@@ -143,10 +151,6 @@ function Sidebar({ status, tab, goTo }: { status: Status; tab: Tab; goTo: GoTo }
             {gw.health.reachable ? "Gateway online" : "Gateway down"}
           </span>
         </div>
-        <button type="button" className="acct" onClick={() => goTo("cloudflare")}>
-          <strong>{status.cloudflare?.accountName ?? "Cloudflare account"}</strong>
-          {status.connections.length > 1 ? `${status.connections.length} accounts · switch` : "Switch or add account"}
-        </button>
       </div>
     </aside>
   );

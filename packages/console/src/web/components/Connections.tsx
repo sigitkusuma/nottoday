@@ -4,7 +4,8 @@
  * the console shows the active one.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useMaybeAccounts } from "../accounts";
 import { api } from "../api";
 import type { GoTo } from "../App";
 import type { ConnectionSummary, Status } from "../types";
@@ -13,10 +14,19 @@ import { Avatar, PageHead, SecretField, StatusPill } from "./parts";
 import { TokenGuide } from "./TokenGuide";
 import { ConfirmButton, ErrorNotice, useAction } from "./ui";
 
-export function Connections({ status, onStatusChange, goTo }: { status: Status; onStatusChange: () => void; goTo: GoTo }) {
+export function Connections({ status, sub, onStatusChange, goTo }: { status: Status; /** "add" opens the add-an-account form. */ sub?: string; onStatusChange: () => void; goTo: GoTo }) {
   const [token, setToken] = useState("");
   const [note, setNote] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState(sub === "add");
+  const addForm = useRef<HTMLFormElement>(null);
+  const accounts = useMaybeAccounts();
+
+  // "Add a Cloudflare account" in the sidebar menu lands here with the form open.
+  useEffect(() => {
+    if (sub !== "add") return;
+    setAdding(true);
+    addForm.current?.scrollIntoView({ block: "start" });
+  }, [sub]);
   const add = useAction();
   const act = useAction();
 
@@ -31,7 +41,7 @@ export function Connections({ status, onStatusChange, goTo }: { status: Status; 
     <>
       <PageHead
         title="Cloudflare accounts"
-        sub="Each account you connect has its own gateway. Only one is active at a time: the Dashboard, Bots and Activity pages show the active one. Tokens stay on this computer, in a file only your user can read."
+        sub="Each account has its own gateway, with its own apps, routes and lists. Switch accounts at the top of the sidebar: Activity, Lists and Versions show the account you're in, while the Dashboard and Apps pages can show all of them. Tokens stay on this computer, in a file only your user can read."
       />
       <ErrorNotice error={act.error} />
       {note && (
@@ -52,6 +62,12 @@ export function Connections({ status, onStatusChange, goTo }: { status: Status; 
               {c.active && <StatusPill tone="ok" label="Active" />}
             </div>
             <dl className="kv small">
+              {accounts?.accounts.find((a) => a.id === c.id) && (
+                <>
+                  <dt>Apps</dt>
+                  <dd>{accounts.accounts.find((a) => a.id === c.id)!.line}</dd>
+                </>
+              )}
               <dt>Gateway</dt>
               <dd>
                 {c.gatewayUrl ? (
@@ -91,6 +107,7 @@ export function Connections({ status, onStatusChange, goTo }: { status: Status; 
       </p>
 
       <form
+        ref={addForm}
         className="block"
         aria-labelledby="add-account"
         onSubmit={(e) => {

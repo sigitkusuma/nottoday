@@ -201,6 +201,12 @@ export async function removeConnection(id: string): Promise<void> {
   await writeFileState(s);
 }
 
+/** Every saved connection as the console would see it if it were active, for reading other accounts without switching. */
+export async function connectionStates(): Promise<{ id: string; active: boolean; state: LocalState }[]> {
+  const s = await readFileState();
+  return s.connections.map((c) => ({ id: c.id, active: c.id === s.activeId, state: { cloudflare: c.cloudflare, gateway: c.gateway, n8n: s.n8n } }));
+}
+
 export async function activeConnectionId(): Promise<string | undefined> {
   return (await readFileState()).activeId;
 }

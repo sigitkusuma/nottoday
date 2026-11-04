@@ -10,6 +10,7 @@ import { api } from "../api";
 import { useConfig } from "../config";
 import { SOURCES, VERIFY_PRESETS, sourceInfo } from "../sources";
 import type { Status } from "../types";
+import { GatewayPicker } from "./Accounts";
 import { ConnectSlackApp } from "./ConnectSlackApp";
 import { Icon } from "./icons";
 import { LiveCheck } from "./LiveCheck";
@@ -29,6 +30,7 @@ export function ConnectApp(props: Props) {
   return (
     <>
       <PageHead title="Connect an app" sub="Where do the requests that start your n8n workflow come from?" back={{ label: "Back to Apps", onClick: props.onCancel }} />
+      <GatewayPicker />
       <div className="tiles source-tiles">
         {(Object.keys(SOURCES) as SourceType[]).map((id) => {
           const s = SOURCES[id];

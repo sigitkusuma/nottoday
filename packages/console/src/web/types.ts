@@ -1,5 +1,7 @@
 /** Shapes the console API returns. Config types come from the shared package. */
 
+import type { AppConfig } from "@gw/shared";
+
 export type { AppConfig, EventFilters, GatewayConfig, ListRef, ListSource, Route, Trigger } from "@gw/shared";
 
 export interface ConnectionSummary {
@@ -80,4 +82,22 @@ export interface WorkflowUsage {
   active: boolean;
   executions: number;
   triggers: TriggerNode[];
+}
+
+/** One saved account's gateway as `GET /overview` returns it: read without making the account active. */
+export interface AccountOverview {
+  id: string;
+  active: boolean;
+  accountId: string;
+  accountName: string | null;
+  scriptName: string;
+  url: string;
+  statsEnabled: boolean;
+  /** Absent when the account couldn't be read; `error` says why. */
+  health?: { reachable: boolean; ok?: boolean; version?: string };
+  apps?: Record<string, AppConfig>;
+  missingSecrets?: string[];
+  routes?: RouteSummary[];
+  signals?: AppSignal[];
+  error?: string;
 }

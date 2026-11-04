@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { useAccounts } from "../accounts";
 import { api } from "../api";
 import { useBots, type Bot } from "../bots";
 import type { GoTo } from "../App";
@@ -15,6 +16,7 @@ import { useLive } from "../useLive";
 import { AddBotCard, BotCard } from "./BotCard";
 import { requestPath, sourceOf, type SourceType } from "@gw/shared";
 import { sourceInfo } from "../sources";
+import { AllAccountsApps } from "./Accounts";
 import { ConnectApp } from "./ConnectApp";
 import { SourceTag } from "./BotCard";
 import { LiveCheck, describe } from "./LiveCheck";
@@ -39,6 +41,8 @@ export function Apps({
 }) {
   const { config, save, loadError } = useConfig();
   const bots = useBots();
+  const acc = useAccounts();
+  const [scope, setScope] = useScope();
   const [editing, setEditing] = useState<{ app: string; route?: string; draft?: RouteDraft } | null>(null);
   const [savedNote, setSavedNote] = useState<string | null>(null);
 
@@ -154,11 +158,23 @@ export function Apps({
         title="Apps"
         sub="Each connected app sends its requests to its own gateway URL. Open one to see its routes and what's happening on it."
         actions={
-          bots.length > 0 && (
-            <button type="button" className="btn primary" onClick={() => goTo("apps/new")}>
-              Connect an app
-            </button>
-          )
+          <>
+            {acc.multiple && (
+              <div className="seg" role="group" aria-label="Which accounts to show">
+                <button type="button" aria-pressed={scope === "this"} onClick={() => setScope("this")}>
+                  This account
+                </button>
+                <button type="button" aria-pressed={scope === "all"} onClick={() => setScope("all")}>
+                  All accounts
+                </button>
+              </div>
+            )}
+            {(bots.length > 0 || (acc.multiple && scope === "all")) && (
+              <button type="button" className="btn primary" onClick={() => goTo("apps/new")}>
+                Connect an app
+              </button>
+            )}
+          </>
         }
       />
       {botKey && !config.apps[botKey] && (
@@ -171,7 +187,9 @@ export function Apps({
           {savedNote}
         </div>
       )}
-      {bots.length === 0 ? (
+      {acc.multiple && scope === "all" ? (
+        <AllAccountsApps goTo={goTo} />
+      ) : bots.length === 0 ? (
         <Empty
           title="No apps yet"
           actions={
@@ -192,6 +210,30 @@ export function Apps({
       )}
     </div>
   );
+}
+
+const SCOPE_KEY = "nottoday-apps-scope";
+
+/** "This account" or "All accounts" on the Apps page. Remembered in this browser; with several accounts it starts on "All". */
+function useScope(): ["this" | "all", (s: "this" | "all") => void] {
+  const [scope, setScope] = useState<"this" | "all">(() => {
+    try {
+      return localStorage.getItem(SCOPE_KEY) === "this" ? "this" : "all";
+    } catch {
+      return "all";
+    }
+  });
+  return [
+    scope,
+    (s) => {
+      setScope(s);
+      try {
+        localStorage.setItem(SCOPE_KEY, s);
+      } catch {
+        // Not remembered; it still works for this visit.
+      }
+    },
+  ];
 }
 
 function BotsGrid({ bots, status, goTo }: { bots: Bot[]; status: Status; goTo: GoTo }) {

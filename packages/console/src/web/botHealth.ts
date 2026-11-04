@@ -147,6 +147,32 @@ export function botTotals(routes: RouteSummary[], app: string, modeOf: (route: s
   return t;
 }
 
+/** One app with its health, counts and last sign of life. */
+export interface Bot {
+  key: string;
+  app: AppConfig;
+  status: BotStatus;
+  totals: BotTotals;
+  /** ms since epoch, 0 if never. */
+  seen: number;
+}
+
+/** Every app of a gateway as a Bot, the ones that need attention first. Used for the active account (with live events) and for the others (without). */
+export function makeBots(i: { apps: Record<string, AppConfig>; missingSecrets: string[]; routes: RouteSummary[]; signals: AppSignal[]; live: LiveEvent[]; now: number }): Bot[] {
+  const list = Object.entries(i.apps).map(([key, app]): Bot => {
+    const mine = i.routes.filter((r) => r.app === key);
+    const signal = i.signals.find((s) => s.app === key);
+    return {
+      key,
+      app,
+      status: botStatus({ key, app, missingSecret: i.missingSecrets.includes(key), signal, routes: mine, live: i.live, now: i.now }),
+      totals: botTotals(i.routes, key, (name) => app.routes.find((r) => r.name === name)?.mode),
+      seen: lastSeen(signal, i.live, key),
+    };
+  });
+  return list.sort((a, b) => byAttention(a.status, b.status) || a.key.localeCompare(b.key));
+}
+
 const ORDER: Record<Tone, number> = { bad: 0, warn: 1, ok: 2, idle: 3 };
 /** Bots that need attention first. */
 export const byAttention = (a: BotStatus, b: BotStatus): number => ORDER[a.tone] - ORDER[b.tone];

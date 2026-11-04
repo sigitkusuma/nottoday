@@ -298,6 +298,37 @@ describe("saved Cloudflare accounts", () => {
     expect(status.body.connections).toHaveLength(2);
   });
 
+  it("overview reads the other accounts' gateways without switching to them", async () => {
+    await connectAndInstall();
+    const [acme] = await connections();
+    await call("POST", "/apps", { key: "support", signingSecret: SECRET });
+    await call("POST", "/cloudflare/token", { token: "cf-token-b" });
+    await call("POST", "/gateway/install", { scriptName: "beta-gateway" });
+
+    type Overview = { accounts: { accountName: string; active: boolean; url: string; apps?: Record<string, unknown>; missingSecrets?: string[]; health?: { reachable: boolean }; error?: string }[] };
+    const all = (await call<Overview>("GET", "/overview")).body.accounts;
+    expect(all.map((a) => [a.accountName, a.active])).toEqual([["Acme", false], ["Beta", true]]);
+
+    const others = (await call<Overview>("GET", "/overview?others=1")).body.accounts;
+    expect(others).toHaveLength(1);
+    expect(others[0]).toMatchObject({ accountName: "Acme", url: "https://slack-gateway.acme.workers.dev", missingSecrets: [], health: { reachable: true } });
+    expect(Object.keys(others[0].apps!)).toEqual(["support"]);
+    // Reading Acme didn't make it the active account.
+    expect((await connections()).find((c) => c.id === acme.id)!.active).toBe(false);
+  });
+
+  it("overview reports an account it can't read instead of failing the whole request", async () => {
+    await connectAndInstall();
+    await call("POST", "/cloudflare/token", { token: "cf-token-b" });
+    await call("POST", "/gateway/install", { scriptName: "beta-gateway" });
+    cf.token = "revoked-in-cloudflare"; // Acme's saved token no longer works; Beta's still does.
+    const res = await call<{ accounts: { accountName: string; error?: string; apps?: unknown }[] }>("GET", "/overview?others=1");
+    expect(res.status).toBe(200);
+    expect(res.body.accounts[0]).toMatchObject({ accountName: "Acme" });
+    expect(res.body.accounts[0].error).toMatch(/Invalid API Token/);
+    expect(res.body.accounts[0].apps).toBeUndefined();
+  });
+
   it("switches between accounts and each keeps its own gateway", async () => {
     await connectAndInstall();
     await call("POST", "/cloudflare/token", { token: "cf-token-b" });

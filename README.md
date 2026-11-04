@@ -42,7 +42,7 @@ npx nottoday
 
 The console opens in your browser with a setup checklist that shows what's done and what's next:
 
-1. **Connect Cloudflare.** A link opens Cloudflare's token page with the right permissions filled in. Paste the token back. You can save several Cloudflare accounts, each with its own gateway, and switch between them from the account link in the header.
+1. **Connect Cloudflare.** A link opens Cloudflare's token page with the right permissions filled in. Paste the token back. You can save several Cloudflare accounts. Each one has its own gateway, with its own apps, routes and lists. The account switcher at the top of the sidebar changes which one you're working in, and flags the others when something needs a look. The Dashboard shows every account at a glance, the Apps page can list all their apps together, and *Connect an app* asks which gateway the new app goes to.
 2. **Install.** One click creates the Worker, its settings store and its `workers.dev` address.
 3. **Turn on stats** (optional, free). Cloudflare needs one Analytics Engine dataset; the console shows the exact name to use. Routing works without it.
 4. **Connect n8n** (optional). Counts executions per workflow, so you can see which ones to fix, and lets you pick trigger URLs from a list.
