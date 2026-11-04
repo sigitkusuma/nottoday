@@ -34,7 +34,8 @@ export interface BotInput {
   now?: number;
 }
 
-const ts = (iso?: string): number => {
+/** Stats timestamps ("2026-11-04 07:30:00") are UTC without a zone mark. */
+export const ts = (iso?: string): number => {
   if (!iso) return 0;
   const t = Date.parse(iso.includes("T") || iso.endsWith("Z") ? iso : `${iso.replace(" ", "T")}Z`);
   return Number.isNaN(t) ? 0 : t;

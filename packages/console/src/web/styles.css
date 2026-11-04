@@ -729,3 +729,13 @@ textarea.payload { min-height: 140px; max-width: none; margin-bottom: 4px; }
 .pill.error::before { background: var(--bad-dot); }
 .pill.unrouted { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--border-strong); }
 .pill.unrouted::before { background: transparent; box-shadow: inset 0 0 0 2px var(--faint); }
+
+/* Connect a Slack app: what the bot listens to */
+.listen { min-width: 0; margin: 18px 0 0; padding: 0; border: 0; }
+.listen legend { padding: 0; margin-bottom: 6px; font-weight: 600; }
+.listen-options { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr)); }
+.listen .tile input[type="checkbox"] { width: 100%; height: 100%; }
+
+.notice.info { background: var(--info-soft); border-color: var(--info-dot); }
+.notice.noise ul { margin: 6px 0 4px; }
+.notice.noise p { margin: 0; color: var(--muted); }

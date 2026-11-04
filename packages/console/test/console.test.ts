@@ -274,6 +274,20 @@ describe("n8n", () => {
   });
 });
 
+describe("events no route uses", () => {
+  it("counts unrouted events per app and type from the gateway's own stats", async () => {
+    await connectAndInstall();
+    cf.sqlRows = [{ app: "support", type: "message", n: "4210.5", last: "2026-11-04 07:55:00" }];
+    const res = await call<{ rows: { app: string; type: string; count: number; last: string }[] }>("GET", "/stats/unrouted?days=1");
+    expect(res.body.rows).toEqual([{ app: "support", type: "message", count: 4210.5, last: "2026-11-04 07:55:00" }]);
+    const q = cf.sqlQueries.at(-1)!;
+    expect(q).toContain("FROM slack_gateway_decisions");
+    expect(q).toContain("'unrouted'");
+    expect(q).toContain("INTERVAL '1' DAY");
+    expect((await call("GET", "/stats/unrouted?days=3")).status).toBe(400);
+  });
+});
+
 describe("reconnecting to a gateway that's already in the account", () => {
   type Existing = { gateways: { scriptName: string; apps: number; routes: number; url?: string }[] };
   const existing = async () => (await call<Existing>("GET", "/gateway/existing")).body.gateways;

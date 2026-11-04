@@ -9,7 +9,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { api } from "../api";
 import { useConfig } from "../config";
-import { BOT_EVENTS, BOT_SCOPES, botHandle, buildManifest, createAppUrl } from "../manifest";
+import { DEFAULT_LISTEN, LISTEN_OPTIONS, botHandle, buildManifest, createAppUrl, hearsMessages, listenEvents, listenScopes, type ListenId } from "../manifest";
 import type { Status } from "../types";
 import { Icon } from "./icons";
 import { LiveCheck } from "./LiveCheck";
@@ -20,7 +20,7 @@ const STEPS = [
   { title: "Name it", headline: "Name your bot", lead: "This is what people see in Slack. It also becomes part of the address Slack sends events to." },
   { title: "Create it in Slack", headline: "Create the app in Slack", lead: "The gateway can't create the Slack app for you, so this opens Slack with everything filled in." },
   { title: "Add the signing secret", headline: "Paste the signing secret", lead: "The gateway uses it to check that a request really came from Slack, and drops everything else." },
-  { title: "Connect and test", headline: "Connect it and send a test", lead: "Finish in Slack, then post a message. This page confirms each step as it happens." },
+  { title: "Connect and test", headline: "Connect it and send a test", lead: "Finish in Slack, then send the bot something. This page confirms each step as it happens." },
 ] as const;
 
 export function ConnectSlackApp({ status, onCancel, onBack, onDone }: { status: Status; onCancel: () => void; onBack?: () => void; onDone: (appKey: string) => void }) {
@@ -32,6 +32,7 @@ export function ConnectSlackApp({ status, onCancel, onBack, onDone }: { status: 
   const [keyEdited, setKeyEdited] = useState(false);
   const [editKey, setEditKey] = useState(false);
   const [path, setPath] = useState<"new" | "existing">("new");
+  const [listen, setListen] = useState<ListenId[]>(DEFAULT_LISTEN);
   const [secret, setSecret] = useState("");
   const [showSecret, setShowSecret] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -50,7 +51,10 @@ export function ConnectSlackApp({ status, onCancel, onBack, onDone }: { status: 
   const appKey = keyEdited ? key : slugKey(name);
   const requestUrl = `${status.gateway!.url}/slack/${appKey || "<name>"}`;
   const handle = botHandle(name);
-  const manifest = buildManifest(name, requestUrl);
+  const manifest = buildManifest(name, requestUrl, undefined, listen);
+  const botEvents = listenEvents(listen);
+  const botScopes = listenScopes(listen);
+  const hearsChat = hearsMessages(listen);
 
   const nameError = !name.trim() ? "Give the Slack app a name." : name.trim().length > 35 ? "Slack allows at most 35 characters." : "";
   const keyError = !appKey
@@ -68,6 +72,7 @@ export function ConnectSlackApp({ status, onCancel, onBack, onDone }: { status: 
   const next = () => {
     if (step === 0) {
       setTouched({ ...touched, name: true, key: true });
+      if (listen.length === 0) return;
       if (nameError || keyError) {
         if (!nameError) setEditKey(true);
         // Move keyboard and screen-reader users to the first field that needs fixing.
@@ -220,6 +225,31 @@ export function ConnectSlackApp({ status, onCancel, onBack, onDone }: { status: 
                   )}
                 </label>
               )}
+
+              <fieldset className="listen">
+                <legend>What should the bot listen to?</legend>
+                <p className="hint" style={{ marginTop: 0 }}>
+                  Slack only sends what you tick here, and every event is a request to the gateway. Tick what at least one of your workflows needs; you can change it later in Slack's Event Subscriptions.
+                </p>
+                <div className="listen-options">
+                  {LISTEN_OPTIONS.map((o) => (
+                    <label key={o.id} className={`tile${listen.includes(o.id) ? " selected" : ""}`}>
+                      <input
+                        type="checkbox"
+                        checked={listen.includes(o.id)}
+                        onChange={(e) => setListen(LISTEN_OPTIONS.map((x) => x.id).filter((id) => (id === o.id ? e.target.checked : listen.includes(id))))}
+                      />
+                      <strong>{o.label}</strong>
+                      <span className="small">{o.hint}</span>
+                    </label>
+                  ))}
+                </div>
+                {listen.length === 0 && (
+                  <span className="field-error" role="alert">
+                    Pick at least one, or the bot would hear nothing.
+                  </span>
+                )}
+              </fieldset>
             </div>
           )}
 
@@ -268,11 +298,11 @@ export function ConnectSlackApp({ status, onCancel, onBack, onDone }: { status: 
                       <dl className="kv">
                         <dt>Bot events</dt>
                         <dd>
-                          <Codes items={BOT_EVENTS} />
+                          <Codes items={botEvents} />
                         </dd>
                         <dt>Permissions</dt>
                         <dd>
-                          <Codes items={BOT_SCOPES} />
+                          <Codes items={botScopes} />
                         </dd>
                         <dt>Request URL</dt>
                         <dd>
@@ -392,8 +422,8 @@ export function ConnectSlackApp({ status, onCancel, onBack, onDone }: { status: 
                     <Todo i={2} ticked={ticked} tick={tick} title="Invite the bot to a test channel">
                       <CopyField value={`/invite @${handle}`} label="Invite command" />
                     </Todo>
-                    <Todo i={3} ticked={ticked} tick={tick} title="Post a message there">
-                      Anything will do. It should appear in the live check below within a couple of seconds.
+                    <Todo i={3} ticked={ticked} tick={tick} title={hearsChat ? "Post a message there" : "Mention the bot there"}>
+                      {hearsChat ? "Anything will do." : `Write @${handle} and something after it.`} It should appear in the live check below within a couple of seconds.
                     </Todo>
                   </>
                 ) : (
@@ -403,19 +433,19 @@ export function ConnectSlackApp({ status, onCancel, onBack, onDone }: { status: 
                       <CopyField value={requestUrl} label="Request URL" />
                     </Todo>
                     <Todo i={1} ticked={ticked} tick={tick} title="Subscribe to bot events, then Save Changes">
-                      Under Subscribe to bot events, add:
-                      <CopyField value={BOT_EVENTS.join(" ")} label="Bot events" />
+                      Under Subscribe to bot events, add only these (the ones you chose in step 1):
+                      <CopyField value={botEvents.join(" ")} label="Bot events" />
                     </Todo>
                     <Todo i={2} ticked={ticked} tick={tick} title="Reinstall if Slack asks">
                       Slack asks you to reinstall the app after you change permissions or events.
                     </Todo>
-                    <Todo i={3} ticked={ticked} tick={tick} title="Post a message where the bot is">
+                    <Todo i={3} ticked={ticked} tick={tick} title={hearsChat ? "Post a message where the bot is" : "Mention the bot where it is"}>
                       Make sure the bot is in the channel you'll test in.
                     </Todo>
                   </>
                 )}
               </ul>
-              <LiveCheck appKey={appKey} botHandle={path === "new" ? handle : undefined} />
+              <LiveCheck appKey={appKey} botHandle={path === "new" ? handle : undefined} mentionOnly={!hearsChat} />
             </div>
           )}
 

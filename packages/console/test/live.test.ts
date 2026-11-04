@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/server/app";
 import { TailHub, parseTailMessage, type LiveEvent, type LiveStatus } from "../src/server/tail";
-import { BOT_EVENTS, botHandle, buildManifest, createAppUrl } from "../src/web/manifest";
+import { BOT_EVENTS, BOT_SCOPES, DEFAULT_LISTEN, LISTEN_OPTIONS, botHandle, buildManifest, createAppUrl, hearsMessages, listenEvents, listenScopes } from "../src/web/manifest";
 import { FakeTailSocket, fakeCloudflare, fakeFetch, tailMessage, type FakeCloudflare } from "./fakes";
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
@@ -147,5 +147,39 @@ describe("Slack app manifest", () => {
     expect(buildManifest("x".repeat(50), "https://x.test").display_information.name).toHaveLength(35);
     expect(botHandle("Ops Bot (EU)!")).toBe("ops-bot-eu");
     expect(botHandle("!!!")).toBe("gateway-bot");
+  });
+});
+
+describe("what the bot listens to", () => {
+  it("starts with everything, as before", () => {
+    expect(DEFAULT_LISTEN).toEqual(["mentions", "channels", "private", "dms"]);
+    expect(new Set(BOT_EVENTS)).toEqual(new Set(["app_mention", "message.channels", "message.groups", "message.im"]));
+    expect(new Set(BOT_SCOPES)).toEqual(new Set(["app_mentions:read", "channels:history", "groups:history", "im:history", "chat:write"]));
+  });
+
+  it("@mentions only subscribes to app_mention and asks for nothing more than it needs", () => {
+    const m = buildManifest("Scout", "https://gw.test/slack/scout", undefined, ["mentions"]);
+    expect(m.settings.event_subscriptions.bot_events).toEqual(["app_mention"]);
+    expect(m.oauth_config.scopes.bot).toEqual(["app_mentions:read", "chat:write"]);
+    expect(m.features.app_home.messages_tab_enabled).toBe(false);
+  });
+
+  it("direct messages turn the Messages tab on", () => {
+    expect(buildManifest("x", "https://x.test", undefined, ["dms"]).features.app_home.messages_tab_enabled).toBe(true);
+    expect(buildManifest("x", "https://x.test").features.app_home.messages_tab_enabled).toBe(true);
+  });
+
+  it("every event comes with its permission, in a stable order", () => {
+    for (const o of LISTEN_OPTIONS) {
+      expect(listenEvents([o.id])).toEqual(o.events);
+      expect(listenScopes([o.id])).toEqual([...o.scopes, "chat:write"]);
+    }
+    expect(listenEvents(["dms", "mentions"])).toEqual(["app_mention", "message.im"]);
+  });
+
+  it("knows whether ordinary messages will arrive, which changes how to test", () => {
+    expect(hearsMessages(["mentions"])).toBe(false);
+    expect(hearsMessages(["mentions", "dms"])).toBe(true);
+    expect(hearsMessages([])).toBe(false);
   });
 });

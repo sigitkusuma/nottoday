@@ -13,7 +13,8 @@ import { timeAgo } from "./ui";
 
 const HINT_AFTER_MS = 45_000;
 
-export function LiveCheck({ appKey, botHandle, compact, source = "slack" }: { appKey: string; botHandle?: string; compact?: boolean; source?: SourceType }) {
+/** `mentionOnly`: the bot only hears @mentions, so a plain message won't show up. */
+export function LiveCheck({ appKey, botHandle, compact, source = "slack", mentionOnly }: { appKey: string; botHandle?: string; compact?: boolean; source?: SourceType; mentionOnly?: boolean }) {
   const live = useLive();
   const [startedAt] = useState(() => Date.now());
   const [now, setNow] = useState(() => Date.now());
@@ -54,7 +55,13 @@ export function LiveCheck({ appKey, botHandle, compact, source = "slack" }: { ap
         <Check
           ok={Boolean(firstEvent)}
           label={firstEvent ? `First event arrived (${firstEvent.type ?? "event"}, ${timeAgo(firstEvent.time)})` : "First event arrives"}
-          pending={botHandle ? `Post a message in a channel the bot is in (invite it with /invite @${botHandle}).` : "Post a message in a channel the bot is in."}
+          pending={
+            mentionOnly
+              ? `Mention the bot in a channel it is in, like @${botHandle ?? "the-bot"} hello (invite it with /invite @${botHandle ?? "the-bot"}).`
+              : botHandle
+                ? `Post a message in a channel the bot is in (invite it with /invite @${botHandle}).`
+                : "Post a message in a channel the bot is in."
+          }
         />
         <Check ok={!badSignature && (verified || Boolean(firstEvent))} failed={Boolean(badSignature)} label={badSignature ? "Signature check failed" : "Signatures check out"} pending="Confirmed with the first request." />
       </ul>

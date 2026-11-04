@@ -471,10 +471,17 @@ function FineTune(p: {
                 setR({ ...r, on: t === "event" ? { type: "event", events: splitList(p.eventsText) } : t === "command" ? { type: "command", commands: [] } : { type: "interactivity" } })
               }
             >
-              {t === "event" ? "Messages and mentions" : t === "interactivity" ? "Buttons, menus, modals" : "Slash command"}
+              {t === "event" ? "Events (messages, @mentions, reactions…)" : t === "interactivity" ? "Buttons, menus, modals" : "Slash command"}
             </Chip>
           ))}
         </div>
+        <p className="tune-hint" style={{ marginTop: 8 }}>
+          {r.on.type === "event"
+            ? "Things that happen in Slack: a message, an @mention of the app, a reaction. Pick which ones below."
+            : r.on.type === "interactivity"
+              ? "Someone clicks a button, chooses from a menu, or submits a form or shortcut."
+              : "Someone types a slash command such as /ask."}
+        </p>
         <div style={{ marginTop: 12 }}>
           {r.on.type === "event" && (
             <EventPicker

@@ -303,6 +303,7 @@ export function createApi(deps: ApiDeps = {}): Hono {
   api.get("/stats/summary", async (c) => c.json({ routes: await stats(await loadState()).summary(days(c, 1)) }));
   api.get("/stats/daily", async (c) => c.json({ days: await stats(await loadState()).daily(days(c, 30)) }));
   api.get("/stats/recent", async (c) => c.json({ decisions: await stats(await loadState()).recent() }));
+  api.get("/stats/unrouted", async (c) => c.json({ rows: await stats(await loadState()).unrouted(days(c, 1)) }));
   api.get("/stats/apps", async (c) => c.json({ apps: await stats(await loadState()).appSignals() }));
 
   /** Server-Sent Events: "status" (connecting / live / unavailable) and "decision" (one per request the gateway handled). */

@@ -6,9 +6,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useAccounts } from "../accounts";
 import { api } from "../api";
-import { useBots, type Bot } from "../bots";
+import { useBots, useNow, type Bot } from "../bots";
 import type { GoTo } from "../App";
 import { useConfig } from "../config";
+import { noiseHints, type UnroutedRow } from "../noise";
 import { summarizeRoute } from "../routeSummary";
 import { useStats } from "../stats";
 import type { GatewayConfig, Route, Status } from "../types";
@@ -276,6 +277,22 @@ function BotDetail({
   const mine = live.events.filter((e) => e.app === key).slice(0, 8);
   const statsOn = status.gateway!.statsEnabled;
 
+  // Events Slack sends that no route lists. Only worth saying once the app has a route that is on.
+  const now = useNow();
+  const [unrouted, setUnrouted] = useState<UnroutedRow[]>([]);
+  const hasActiveRoute = bot.app.routes.some((r) => r.enabled !== false);
+  useEffect(() => {
+    if (!statsOn || source !== "slack" || !hasActiveRoute) return;
+    const load = () =>
+      api<{ rows: UnroutedRow[] }>("GET", "/stats/unrouted?days=1")
+        .then((r) => setUnrouted(r.rows))
+        .catch(() => undefined);
+    void load();
+    const timer = setInterval(() => void load(), 60_000);
+    return () => clearInterval(timer);
+  }, [statsOn, source, hasActiveRoute]);
+  const noise = source === "slack" && hasActiveRoute ? noiseHints(unrouted, key, now) : [];
+
   const mutate = (change: (next: GatewayConfig) => void) =>
     action.run(async () => {
       const next = structuredClone(config!);
@@ -311,6 +328,20 @@ function BotDetail({
         </div>
       )}
       <ErrorNotice error={action.error} />
+      {noise.length > 0 && (
+        <div className="notice info small noise" role="status">
+          <b>Slack is sending events that no route uses</b>
+          <ul>
+            {noise.map((h) => (
+              <li key={h.type}>
+                <b>{fmt(h.count)}</b> <code>{h.type}</code> {h.count === 1 ? "event" : "events"} in the last day. In your Slack app, open <b>Event Subscriptions</b> and remove {h.unsubscribe.map((e, i) => <span key={e}>{i > 0 && ", "}<code>{e}</code></span>)} from <b>Subscribe to bot events</b>
+                {h.type === "message" ? " (whichever are listed)" : ""}.
+              </li>
+            ))}
+          </ul>
+          <p>Each one is a request to the gateway for nothing. Leave the permissions (scopes) as they are: a workflow may still call Slack's API with them.</p>
+        </div>
+      )}
 
       <div className="detail-grid">
         <div>

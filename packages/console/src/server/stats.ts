@@ -50,6 +50,15 @@ export interface AppSignal {
   lastRequest?: string;
 }
 
+export interface UnroutedType {
+  app: string;
+  /** The event type, e.g. "message" or "reaction_added". */
+  type: string;
+  count: number;
+  /** When the latest one arrived. */
+  last: string;
+}
+
 export interface DailyPoint {
   day: string;
   forwarded: number;
@@ -130,6 +139,20 @@ export class Stats {
        LIMIT ${int(limit)}`,
     );
     return rows.map((r) => ({ ...r, status: Number(r.status) }));
+  }
+
+  /** Events that reached the gateway and no route lists, per app and event type: traffic the Slack app could simply not subscribe to. */
+  async unrouted(days: number): Promise<UnroutedType[]> {
+    const rows = await this.cf.sql<{ app: string; type: string; n: number; last: string }>(
+      this.accountId,
+      `SELECT ${C.app} AS app, ${C.type} AS type, SUM(_sample_interval) AS n, MAX(timestamp) AS last
+       FROM ${this.dataset}
+       WHERE timestamp > NOW() - INTERVAL '${int(days)}' DAY AND ${C.outcome} = 'unrouted' AND ${C.kind} = 'event'
+       GROUP BY app, type
+       ORDER BY n DESC
+       LIMIT 100`,
+    );
+    return rows.map((r) => ({ app: r.app, type: r.type, count: Number(r.n), last: r.last }));
   }
 
   /** Per app: when Slack last verified the URL, last sent a bad signature, and last sent anything. */
