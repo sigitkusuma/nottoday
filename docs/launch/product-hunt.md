@@ -6,7 +6,6 @@ Everything to paste into the Product Hunt submission form, plus the maker commen
 
 These block the launch. Product Hunt visitors click through to GitHub and run `npx nottoday` within minutes, so all of them have to be done before the post goes live.
 
-- [ ] **Employer sign-off.** The code was written alongside work. Get a written OK to publish it under Apache-2.0 on your personal account.
 - [ ] **Make the repo public:** github.com/sigitkusuma/nottoday. Check Settings → Code security: private vulnerability reporting must be on, since SECURITY.md links to it.
 - [ ] **Publish to npm.** Remove `"private": true` from `packages/console/package.json`, then from the repo root: `npm run check && npm run build -w nottoday && npm publish -w nottoday --access public`. The name `nottoday` was free on 2026-11-05. Turn on 2FA for publishing on your npm account first.
 - [ ] **Fresh-machine test.** On a computer (or user account) that has never run it: `npx nottoday`, connect a throwaway Cloudflare account, install, connect a test Slack app, add a route, send a message, see it in Activity. Time it. The connect card says "about five minutes", so check that's still true for a newcomer.
