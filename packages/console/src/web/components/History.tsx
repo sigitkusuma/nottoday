@@ -101,7 +101,7 @@ export function History({ status, goTo }: { status: Status; onStatusChange: () =
                 }}
               />
             </div>
-            <p className="hint">Importing replaces the whole config (the current one is kept as a version). Apps it adds need their signing secret set under Bots.</p>
+            <p className="hint">Importing replaces the whole config (the current one is kept as a version). Apps it adds need their signing secret set under Apps.</p>
           </section>
 
           <section className="block" aria-labelledby="cf-title">

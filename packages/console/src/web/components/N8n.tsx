@@ -171,7 +171,7 @@ function Usage({ baseUrl, onDisconnect, onStartRoute }: { baseUrl: string; onDis
               );
             })}
           </ol>
-          {Object.keys(config?.apps ?? {}).length === 0 && <p className="hint">To add a route you first need a Slack app: add the one whose events start the workflow under Bots.</p>}
+          {Object.keys(config?.apps ?? {}).length === 0 && <p className="hint">To add a route you first need a Slack app: add the one whose events start the workflow under Apps.</p>}
         </>
       )}
     </>

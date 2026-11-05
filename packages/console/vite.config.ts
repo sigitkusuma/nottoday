@@ -8,6 +8,6 @@ export default defineConfig({
   server: {
     port: 5173,
     // The API server checks the Host header, so rewrite it.
-    proxy: { "/api": { target: "http://127.0.0.1:4870", changeOrigin: true } },
+    proxy: { "/api/": { target: "http://127.0.0.1:4870", changeOrigin: true } },
   },
 });

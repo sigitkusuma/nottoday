@@ -110,3 +110,37 @@ export function explainEvent(e: LiveEvent, ctx: { appHasRoutes: boolean }): Expl
     why: [`${routes.map((r) => `${r.route}: ${reasonText(r.reason, sourceOfEvent(e)) || "a filter dropped it"}`).join("; ")}.`, "It never reached n8n, so it didn't count as an execution."],
   };
 }
+
+/** One line per request, for Activity rows and an app's latest events. */
+export function describe(e: LiveEvent): string {
+  switch (e.kind) {
+    case "verified":
+      return e.source === "github" ? "GitHub sent its ping: verified." : "Slack checked the Request URL: verified.";
+    case "bad_signature":
+      return e.source && e.source !== "slack" ? "Rejected: bad signature (wrong secret?)." : "Rejected: bad signature (wrong signing secret?).";
+    case "unknown_app":
+      return `Rejected: unknown app name "${e.app}".`;
+    case "missing_secret":
+      return "Rejected: no signing secret stored for this app.";
+    case "error":
+      return `Gateway error: ${e.message}`;
+    case "event": {
+      const what = [e.type, e.subtype].filter(Boolean).join(" / ") || "event";
+      const routes = e.routes ?? [];
+      if (routes.length === 0) return `${what}: no route lists this event, so it was dropped.`;
+      const because = (reason?: string) => {
+        const why = reasonText(reason, sourceOfEvent(e));
+        return why ? ` because ${why}` : "";
+      };
+      return `${what}: ${routes
+        .map((r) =>
+          r.forwarded
+            ? r.filter === "fail"
+              ? `${r.route} would drop it${because(r.reason)} (shadow mode: forwarded)`
+              : `${r.route} forwarded${r.status ? ` (n8n ${r.status})` : ""}`
+            : `${r.route} dropped it${because(r.reason)}`,
+        )
+        .join("; ")}.`;
+    }
+  }
+}

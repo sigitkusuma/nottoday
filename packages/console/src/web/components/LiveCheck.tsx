@@ -7,9 +7,12 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import type { SourceType } from "@gw/shared";
+import { describe } from "../activityExplain";
 import { sourceInfo } from "../sources";
 import { useLive, type LiveEvent } from "../useLive";
 import { timeAgo } from "./ui";
+
+export { describe };
 
 const HINT_AFTER_MS = 45_000;
 
@@ -132,35 +135,6 @@ function RecentForApp({ events }: { events: LiveEvent[] }) {
       </ul>
     </div>
   );
-}
-
-export function describe(e: LiveEvent): string {
-  switch (e.kind) {
-    case "verified":
-      return e.source === "github" ? "GitHub sent its ping: verified." : "Slack checked the Request URL: verified.";
-    case "bad_signature":
-      return e.source && e.source !== "slack" ? "Rejected: bad signature (wrong secret?)." : "Rejected: bad signature (wrong signing secret?).";
-    case "unknown_app":
-      return `Rejected: unknown app name "${e.app}".`;
-    case "missing_secret":
-      return "Rejected: no signing secret stored for this app.";
-    case "error":
-      return `Gateway error: ${e.message}`;
-    case "event": {
-      const what = [e.type, e.subtype].filter(Boolean).join(" / ") || "event";
-      const routes = e.routes ?? [];
-      if (routes.length === 0) return `${what}: no route lists this event, so it was dropped.`;
-      return `${what}: ${routes
-        .map((r) =>
-          r.forwarded
-            ? r.filter === "fail"
-              ? `${r.route} forwarded (shadow, would drop: ${r.reason})`
-              : `${r.route} forwarded${r.status ? ` (n8n ${r.status})` : ""}`
-            : `${r.route} dropped (${r.reason})`,
-        )
-        .join("; ")}.`;
-    }
-  }
 }
 
 const STEPS: Record<Exclude<SourceType, "slack">, { ping?: [string, string]; first: [string, (bot?: string) => string]; hints: ReactNode[] }> = {
