@@ -57,6 +57,8 @@ describe("options", () => {
       expect(parseArgs(argv), argv.join(" ")).toHaveProperty("error");
     }
     expect(parseArgs(["--help"])).toEqual({ help: true });
+    expect(parseArgs(["--version"])).toEqual({ version: true });
+    expect(parseArgs(["-v"])).toEqual({ version: true });
   });
 });
 

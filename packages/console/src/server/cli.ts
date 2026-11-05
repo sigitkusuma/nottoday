@@ -14,10 +14,15 @@ import { parseArgs, USAGE } from "./options";
 import { stateDir } from "./store";
 import { SERVE_HINT, startServe, tailscaleName, TailscaleError } from "./tailscale";
 import { fingerprint, machineAddresses, savedSelfSigned, type TlsFiles } from "./tls";
+import { version } from "../../package.json";
 
 const parsed = parseArgs(process.argv.slice(2));
 if ("help" in parsed) {
   console.log(`${USAGE}\n\nTokens are stored in ${stateDir()} (readable only by you).`);
+  process.exit(0);
+}
+if ("version" in parsed) {
+  console.log(version);
   process.exit(0);
 }
 if ("error" in parsed) {

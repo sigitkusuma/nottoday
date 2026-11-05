@@ -23,7 +23,6 @@
     "executions",
     "automation"
   ],
-  "private": true,
   "type": "module",
   "bin": {
     "nottoday": "dist/cli.js"

@@ -27,7 +27,7 @@ export interface CliOptions {
   newToken: boolean;
 }
 
-export type ParsedArgs = CliOptions | { help: true } | { error: string };
+export type ParsedArgs = CliOptions | { help: true } | { version: true } | { error: string };
 
 export const USAGE = `Usage: nottoday [options]
 
@@ -35,6 +35,7 @@ Starts the gateway console and opens it in your browser.
 
   --port <n>           Port to listen on (default 4870)
   --no-open            Don't open the browser
+  --version            Print the version and exit
 
 Running it on a server:
   --host <address>     Listen on this address, e.g. 0.0.0.0 for every network
@@ -59,7 +60,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const flags = new Set<string>();
   const values: Record<string, string[]> = {};
   const takesValue = new Set(["--port", "--host", "--cert", "--key", "--allow-host"]);
-  const known = new Set([...takesValue, "--no-open", "--insecure-http", "--tailscale", "--new-token", "--help", "-h"]);
+  const known = new Set([...takesValue, "--no-open", "--insecure-http", "--tailscale", "--new-token", "--help", "-h", "--version", "-v"]);
   for (let i = 0; i < argv.length; i++) {
     const [name, inline] = argv[i].startsWith("--") && argv[i].includes("=") ? [argv[i].slice(0, argv[i].indexOf("=")), argv[i].slice(argv[i].indexOf("=") + 1)] : [argv[i], undefined];
     if (!known.has(name)) return { error: `Unknown option ${name}. Run nottoday --help for the list.` };
@@ -70,6 +71,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     } else flags.add(name);
   }
   if (flags.has("--help") || flags.has("-h")) return { help: true };
+  if (flags.has("--version") || flags.has("-v")) return { version: true };
 
   const last = (name: string) => values[name]?.at(-1);
   const port = last("--port") === undefined ? 4870 : Number(last("--port"));
