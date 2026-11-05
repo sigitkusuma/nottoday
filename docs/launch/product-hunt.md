@@ -4,14 +4,17 @@ Everything to paste into the Product Hunt submission form, plus the maker commen
 
 ## Before you schedule
 
+Status on 2026-11-05: nottoday 0.1.0 is on npm, the repo is public, and v0.1.0 is released. npm's website still showed a "temporary holding version" while it reviewed the new package; check that https://www.npmjs.com/package/nottoday shows the README before you schedule.
+
 These block the launch, in this order. npm never lets you publish the same version twice, so test before you publish. Product Hunt visitors click through to GitHub and run `npx nottoday` within minutes, so all of it has to be done before the post goes live.
 
-- [ ] **Fresh-machine test.** Build the package file from the repo root: `npm ci && npm run check && npm run build -w nottoday && npm pack -w nottoday`. Copy `nottoday-0.1.0.tgz` to a computer (or user account) that has never run Not Today, and run `npx --yes ./nottoday-0.1.0.tgz`. Connect a throwaway Cloudflare account, install, connect a test Slack app, add a route, send a message, see it in Activity. Time it: the connect card says "about five minutes".
-- [ ] **Publish to npm.** `npm login`, turn on 2FA for publishing on your npm account, then publish the file you tested: `npm publish ./nottoday-0.1.0.tgz --access public`. The name `nottoday` was free on 2026-11-05.
-- [ ] **Make the repo public:** `gh repo edit sigitkusuma/nottoday --visibility public --accept-visibility-change-consequences`. Do it right after publishing: the npm page's screenshot loads from GitHub and stays broken while the repo is private.
-- [ ] **Private vulnerability reporting** (SECURITY.md links to it): `gh api -X PUT repos/sigitkusuma/nottoday/private-vulnerability-reporting`.
-- [ ] **GitHub repo page:** `gh repo edit sigitkusuma/nottoday --homepage https://www.npmjs.com/package/nottoday --add-topic n8n,slack,cloudflare-workers,webhook,automation`. Upload `docs/launch/social-preview.png` under Settings → General → Social preview (there's no command for it).
-- [ ] **Release v0.1.0:** `gh release create v0.1.0 --repo sigitkusuma/nottoday --target main --title "0.1.0" --notes "$(sed -n '/^## 0.1.0/,/^## [0-9]/p' CHANGELOG.md | sed '1d;/^## [0-9]/d')"`. Optionally attach the tarball by adding `./nottoday-0.1.0.tgz` after `v0.1.0`.
+- [ ] **Fresh-machine test.** On a computer (or user account) that has never run Not Today: `npx nottoday`. Connect a throwaway Cloudflare account, install, connect a test Slack app, add a route, send a message, see it in Activity. Time it: the connect card says "about five minutes". Anything it turns up goes out as 0.1.1 before launch day.
+- [x] **Publish to npm.** `npm login`, turn on 2FA for publishing on your npm account, then publish the file you tested: `npm publish ./nottoday-0.1.0.tgz --access public`. The name `nottoday` was free on 2026-11-05.
+- [x] **Make the repo public:** `gh repo edit sigitkusuma/nottoday --visibility public --accept-visibility-change-consequences`. Do it right after publishing: the npm page's screenshot loads from GitHub and stays broken while the repo is private.
+- [x] **Private vulnerability reporting** (SECURITY.md links to it): `gh api -X PUT repos/sigitkusuma/nottoday/private-vulnerability-reporting`.
+- [x] **GitHub repo page:** homepage and topics are set.
+- [ ] **Social preview:** upload `docs/launch/social-preview.png` under Settings → General → Social preview (there's no command for it).
+- [x] **Release v0.1.0:** `gh release create v0.1.0 --repo sigitkusuma/nottoday --target main --title "0.1.0" --notes "$(sed -n '/^## 0.1.0/,/^## [0-9]/p' CHANGELOG.md | sed '1d;/^## [0-9]/d')"`. Optionally attach the tarball by adding `./nottoday-0.1.0.tgz` after `v0.1.0`.
 
 ## The listing
 
