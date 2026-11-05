@@ -1,6 +1,6 @@
 # Product Hunt launch kit: Not Today
 
-Everything to paste into the Product Hunt submission form, plus the maker comment, replies to the questions people will ask, and posts for other channels. Text in [square brackets] is yours to fill in: facts only you know. Don't ship anything with a bracket left in it.
+Everything to paste into the Product Hunt submission form, plus the maker comment, replies to the questions people will ask, and posts for other channels. The only brackets left are [Product Hunt link]: paste the post's URL once it's scheduled.
 
 ## Before you schedule
 
@@ -59,11 +59,11 @@ A 30 to 60 second video as the first gallery item helps a lot. See "Optional: la
 
 Post this the moment the launch goes live. Keep it in your voice. Edit freely, but keep the one rule paragraph: it's the thing a careful n8n user will want to know before trusting a filter in front of their workflows.
 
-> Hi Product Hunt 👋 I'm [first name], and I made Not Today: saving your n8n executions, one "nope" at a time.
+> Hi Product Hunt 👋 I'm Sigit Kusuma, and I made Not Today: saving your n8n executions, one "nope" at a time.
 >
-> [One or two sentences on why you built it, in your words: what you saw happen to your execution count when a Slack workflow went live.]
+> I built this after watching a Slack alert bot on n8n Cloud burn through its monthly executions on messages it threw away at the first check. It only cared about a few mentions, but every message in every channel it was in started a run.
 >
-> The cause: n8n counts an execution every time a trigger fires. A Slack Trigger fires on every message, edit, reaction and bot post in every channel the bot is in, even when the workflow only cares about a few of them and stops at its first IF node. The filter inside the workflow comes too late. By then the execution already counts.
+> The cause: n8n counts an execution every time a trigger fires, and a Slack Trigger fires on every message, edit, reaction and bot post. A filter inside the workflow comes too late: by the time the IF node says no, the run already counts.
 >
 > Not Today moves that filter in front of n8n. It's a small Cloudflare Worker in your own Cloudflare account. It checks Slack's signature, answers Slack straight away, and forwards only the requests a route matches, byte for byte, so your existing Slack Trigger node keeps working without changes. Everything else is dropped and counted as an execution saved.
 >
@@ -83,7 +83,7 @@ Short, so you can paste and adjust.
 The IF node runs inside the execution. By the time it says no, n8n has already counted the run. The gateway says no before n8n is called.
 
 **I self-host n8n. Does this help me?**
-[Check this against n8n's current plans before launch day.] If your plan has no execution limit, the saving is load rather than quota: fewer runs, smaller execution history, less noise in the logs. If your self-hosted plan does count executions, it's the same saving as on n8n Cloud.
+It depends on your plan. n8n's paid plans are priced by monthly executions, including the self-hosted Business plan (40K a month), so there the saving is the same as on n8n Cloud. The free Community Edition has no execution limit, so the saving is load: fewer runs, a smaller execution history, less noise in the logs.
 
 **Can you read my Slack messages?**
 No. The Worker runs in your Cloudflare account, the console runs on your machine, and there's no hosted service. Logs and stats record the event type, channel ID and the routing decision, never message text. SECURITY.md lists exactly what the Cloudflare token can do.
@@ -104,7 +104,7 @@ Nothing from us. It runs on the Cloudflare Workers free plan, which allows 100,0
 It's free at this volume, close to Slack wherever your workspace is, and has no server for you to keep running. The console can be closed: the Worker keeps routing.
 
 **GitHub / Telegram / other webhooks?**
-The engine already handles them, with signature checks for each. The console's connect flow for them is built but switched off until it's been tested against real repositories and bots. [Say when, if you know.]
+The engine already handles them, with signature checks for each. The console's connect flow for them is built but switched off until it's been tested against real repositories and bots. They're next.
 
 **Can I run the console on a server instead of my laptop?**
 Yes: `npx nottoday --host 0.0.0.0` (HTTPS with its own certificate) or `npx nottoday --tailscale`. The README has the details.
@@ -128,7 +128,7 @@ Product Hunt asks makers not to ask for upvotes. Ask for feedback and link to th
 >
 > Setup is `npx nottoday`, which opens a local console. Routes start in shadow mode so you can see what would be dropped before anything is.
 >
-> GitHub: https://github.com/sigitkusuma/nottoday. It's on Product Hunt today too: [link]. I'd like to hear which Slack workflows burn the most executions for you.
+> GitHub: https://github.com/sigitkusuma/nottoday. It's on Product Hunt today too: [Product Hunt link]. I'd like to hear which Slack workflows burn the most executions for you.
 
 **X / Bluesky / Threads:**
 
@@ -136,17 +136,17 @@ Product Hunt asks makers not to ask for upvotes. Ask for feedback and link to th
 >
 > I made Not Today: a free Cloudflare Worker that says "not today" to the Slack requests no workflow needs. Open source, `npx nottoday`.
 >
-> On Product Hunt today: [link]
+> On Product Hunt today: [Product Hunt link]
 
 **LinkedIn:**
 
-> Today I'm launching my first open-source tool on Product Hunt: Not Today.
+> Today I'm launching Not Today on Product Hunt: an open-source tool for anyone running Slack workflows on n8n.
 >
-> [Why you built it, one or two sentences.]
+> I built this after watching a Slack alert bot on n8n Cloud burn through its monthly executions on messages it threw away at the first check. It only cared about a few mentions, but every message in every channel it was in started a run.
 >
-> If you run Slack workflows on n8n, every message in every channel the bot is in counts as an execution, including the ones the workflow throws away. Not Today puts a small Cloudflare Worker in front of n8n that forwards only what a workflow needs. It's free, runs in your own Cloudflare account, and sets up with one command.
+> Not Today puts a small Cloudflare Worker in front of n8n that forwards only the Slack requests a workflow needs, so the rest never becomes an execution. It's free, runs in your own Cloudflare account, and sets up with one command.
 >
-> [link]
+> [Product Hunt link]
 
 **Reddit** (r/n8n): use the forum post above. Lead with the problem, not the launch.
 
